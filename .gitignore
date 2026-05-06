@@ -1,0 +1,30 @@
+# Secrets
+.env
+.envrc.local
+*-keys.json
+reader-*.json
+audit-evidence/
+*.pem
+*.key
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+package-lock.json
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Generated
+upload-script/assets/*
+!upload-script/assets/.gitkeep
+EXECUTION_LOG.md
+tmp/

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>S3 Asset Viewer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <section id="login-view">
+      <h1>S3 Asset Viewer</h1>
+      <form id="login-form">
+        <input type="text" id="username" placeholder="Usuario" autocomplete="username" required />
+        <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password" required />
+        <button type="submit">Entrar</button>
+      </form>
+      <div class="hint">
+        <div><strong>admin</strong> / admin1234 &nbsp;<small>(subir + ver)</small></div>
+        <div><strong>viewer</strong> / viewer1234 &nbsp;<small>(solo ver)</small></div>
+      </div>
+      <p id="login-error" class="error"></p>
+    </section>
+
+    <section id="main-view" hidden>
+      <header>
+        <h1>Bucket assets</h1>
+        <div class="user-info">
+          <span id="user-label"></span>
+          <span id="role-badge" class="badge"></span>
+          <button id="logout">Salir</button>
+        </div>
+      </header>
+
+      <section id="upload-section" hidden>
+        <h2>
+          <span>Subir archivos</span>
+          <span id="capacity-label" class="count"></span>
+        </h2>
+        <input type="file" id="file-input" multiple hidden />
+        <button type="button" id="drop-zone" class="drop-zone" aria-label="Arrastra archivos aquí o haz click para seleccionar">
+          <span class="drop-zone-inner">
+            <svg class="drop-icon" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <path d="M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="drop-title">Arrastra archivos aquí</span>
+            <span class="drop-sub">o haz click para seleccionar &middot; cualquier tipo &middot; max 10MB c/u</span>
+          </span>
+        </button>
+        <div id="bucket-full-banner" class="banner-warn" hidden>
+          <strong>Bucket lleno.</strong> Elimina recursos antes de subir más.
+        </div>
+        <div id="selected-files" class="chips" hidden></div>
+        <div id="upload-actions" class="upload-actions" hidden>
+          <button id="upload-btn">Subir <span id="upload-count">0</span></button>
+          <button id="clear-btn" class="ghost">Limpiar</button>
+        </div>
+        <p id="upload-status"></p>
+      </section>
+
+      <section id="gallery-section">
+        <h2>
+          <span>Galería</span>
+          <span id="gallery-count" class="count"></span>
+          <button id="refresh-btn" class="ghost">refrescar</button>
+        </h2>
+        <div id="gallery" class="asset-list"></div>
+        <nav id="pagination" class="pagination" hidden>
+          <button id="prev-btn" class="ghost">‹ anterior</button>
+          <span id="page-label"></span>
+          <button id="next-btn" class="ghost">siguiente ›</button>
+        </nav>
+      </section>
+    </section>
+
+    <dialog id="detail-modal" class="modal">
+      <button type="button" id="detail-close" class="modal-close" aria-label="Cerrar">&times;</button>
+      <div class="modal-preview">
+        <img id="detail-img" alt="" hidden />
+        <div id="detail-no-preview" class="no-preview" hidden>
+          <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z M14 3v6h6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p>No se puede previsualizar este archivo</p>
+          <span id="detail-no-preview-ext" class="ext-pill"></span>
+        </div>
+      </div>
+      <div class="modal-info">
+        <div class="modal-name" id="detail-name"></div>
+        <dl>
+          <dt>Tamaño</dt><dd id="detail-size"></dd>
+          <dt>Modificado</dt><dd id="detail-modified"></dd>
+          <dt>Key</dt><dd id="detail-key"></dd>
+        </dl>
+        <div class="modal-actions">
+          <a id="detail-open" target="_blank" rel="noopener" class="ghost-link">abrir presigned URL ↗</a>
+          <button type="button" id="detail-delete" class="danger" hidden>Eliminar</button>
+        </div>
+      </div>
+    </dialog>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
