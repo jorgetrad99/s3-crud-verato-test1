@@ -14,7 +14,6 @@ import {
 } from "@aws-sdk/client-s3";
 import { STSClient, AssumeRoleCommand } from "@aws-sdk/client-sts";
 import { fromIni } from "@aws-sdk/credential-providers";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -186,19 +185,12 @@ async function listAssets() {
 app.get("/api/images", auth, async (_req, res) => {
   try {
     const items = await listAssets();
-    const images = await Promise.all(
-      items.map(async (obj) => ({
-        key: obj.Key,
-        name: obj.Key.replace("assets/", ""),
-        size: obj.Size,
-        lastModified: obj.LastModified,
-        url: await getSignedUrl(
-          readerClient,
-          new GetObjectCommand({ Bucket: BUCKET, Key: obj.Key }),
-          { expiresIn: 300 }
-        ),
-      }))
-    );
+    const images = items.map((obj) => ({
+      key: obj.Key,
+      name: obj.Key.replace("assets/", ""),
+      size: obj.Size,
+      lastModified: obj.LastModified,
+    }));
     res.json({
       count: images.length,
       limit: MAX_BUCKET_OBJECTS,
@@ -207,6 +199,31 @@ app.get("/api/images", auth, async (_req, res) => {
     });
   } catch (err) {
     console.error("[images]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Auth-proxied download: returns the bytes only to logged-in users.
+// No public/presigned URLs ever leave the server.
+app.get("/api/asset/:filename", auth, async (req, res) => {
+  const { filename } = req.params;
+  if (!filename || filename.includes("/") || filename.includes("..")) {
+    return res.status(400).json({ error: "invalid filename" });
+  }
+  const key = `assets/${filename}`;
+  try {
+    const obj = await readerClient.send(
+      new GetObjectCommand({ Bucket: BUCKET, Key: key })
+    );
+    if (obj.ContentType) res.setHeader("Content-Type", obj.ContentType);
+    if (obj.ContentLength != null) res.setHeader("Content-Length", obj.ContentLength);
+    res.setHeader("Cache-Control", "private, no-store");
+    obj.Body.pipe(res);
+  } catch (err) {
+    if (err.name === "NoSuchKey" || err.$metadata?.httpStatusCode === 404) {
+      return res.status(404).json({ error: "not found" });
+    }
+    console.error("[asset]", err);
     res.status(500).json({ error: err.message });
   }
 });

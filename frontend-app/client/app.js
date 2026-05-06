@@ -56,7 +56,42 @@ const state = {
   bucketCount: 0,
   bucketLimit: 50,
   bucketFull: false,
+  // cacheKey -> blob URL. cacheKey = `${s3key}|${lastModified}` to invalidate on overwrite.
+  blobCache: new Map(),
 };
+
+function cacheKeyOf(item) {
+  return `${item.key}|${item.lastModified}`;
+}
+
+async function getBlobUrl(item) {
+  const ck = cacheKeyOf(item);
+  const cached = state.blobCache.get(ck);
+  if (cached) return cached;
+  const res = await fetch(`${API}/asset/${encodeURIComponent(item.name)}`, {
+    headers: { Authorization: `Bearer ${state.token}` },
+  });
+  if (!res.ok) throw new Error(`asset fetch failed: HTTP ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  state.blobCache.set(ck, url);
+  return url;
+}
+
+function revokeOrphans(currentItems) {
+  const valid = new Set(currentItems.map(cacheKeyOf));
+  for (const [k, url] of state.blobCache.entries()) {
+    if (!valid.has(k)) {
+      URL.revokeObjectURL(url);
+      state.blobCache.delete(k);
+    }
+  }
+}
+
+function revokeAllBlobs() {
+  for (const url of state.blobCache.values()) URL.revokeObjectURL(url);
+  state.blobCache.clear();
+}
 
 // =============== auth ===============
 loginForm.addEventListener("submit", async (e) => {
@@ -101,6 +136,7 @@ function saveSession(token, user, role) {
   sessionStorage.setItem("role", role);
 }
 function clearSession() {
+  revokeAllBlobs();
   state.token = state.user = state.role = null;
   state.pendingFiles = []; state.images = []; state.page = 1;
   state.bucketCount = 0; state.bucketFull = false;
@@ -284,6 +320,7 @@ async function loadImages() {
     if (res.status === 401) { clearSession(); showLogin(); return; }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const { images, count, limit, full } = await res.json();
+    revokeOrphans(images);
     state.images = images.sort(
       (a, b) => new Date(b.lastModified) - new Date(a.lastModified)
     );
@@ -344,13 +381,14 @@ function renderRow(img) {
   const click = document.createElement("button");
   click.type = "button";
   click.className = "asset-click";
-  click.innerHTML = `
-    ${thumbHtml(img)}
-    <div class="asset-meta">
-      <div class="asset-name">${escapeHtml(img.name)}</div>
-      <div class="asset-sub">${fmtSize(img.size)} &middot; ${fmtDate(img.lastModified)}</div>
-    </div>
+  click.appendChild(buildThumb(img));
+  const meta = document.createElement("div");
+  meta.className = "asset-meta";
+  meta.innerHTML = `
+    <div class="asset-name">${escapeHtml(img.name)}</div>
+    <div class="asset-sub">${fmtSize(img.size)} &middot; ${fmtDate(img.lastModified)}</div>
   `;
+  click.appendChild(meta);
   click.addEventListener("click", () => openDetail(img));
   row.appendChild(click);
 
@@ -378,12 +416,28 @@ function renderRow(img) {
   return row;
 }
 
-function thumbHtml(img) {
-  if (isImage(img.name)) {
-    return `<img class="asset-thumb" src="${img.url}" alt="" loading="lazy" />`;
+function buildThumb(img) {
+  if (!isImage(img.name)) {
+    const div = document.createElement("div");
+    div.className = "asset-thumb file-icon";
+    div.textContent = (extOf(img.name) || "file").toUpperCase().slice(0, 4);
+    return div;
   }
-  const ext = (extOf(img.name) || "file").toUpperCase().slice(0, 4);
-  return `<div class="asset-thumb file-icon">${escapeHtml(ext)}</div>`;
+  const el = document.createElement("img");
+  el.className = "asset-thumb";
+  el.alt = "";
+  el.loading = "lazy";
+  // src is set asynchronously after fetching the blob via auth
+  getBlobUrl(img)
+    .then((url) => { el.src = url; })
+    .catch((err) => {
+      console.warn("thumb load failed", img.name, err);
+      const fallback = document.createElement("div");
+      fallback.className = "asset-thumb file-icon";
+      fallback.textContent = "ERR";
+      el.replaceWith(fallback);
+    });
+  return el;
 }
 
 // =============== detail modal ===============
@@ -393,17 +447,18 @@ function openDetail(img) {
   detailSize.textContent = fmtSize(img.size);
   detailModified.textContent = fmtDate(img.lastModified);
   detailKey.textContent = img.key;
-  detailOpen.href = img.url;
+  detailOpen.removeAttribute("href");
+  detailOpen.setAttribute("download", img.name);
   detailDelete.hidden = state.role !== "admin";
   detailDelete.disabled = false;
 
   if (isImage(img.name)) {
-    detailImg.src = img.url;
+    detailImg.removeAttribute("src");
     detailImg.alt = img.name;
     detailImg.hidden = false;
     detailNoPreview.hidden = true;
   } else {
-    detailImg.src = "";
+    detailImg.removeAttribute("src");
     detailImg.hidden = true;
     detailNoPreview.hidden = false;
     detailNoPreviewExt.textContent = (extOf(img.name) || "file").toUpperCase();
@@ -411,18 +466,29 @@ function openDetail(img) {
 
   if (typeof modal.showModal === "function") modal.showModal();
   else modal.setAttribute("open", "");
+
+  // fetch the blob (auth-proxied), use it for both preview <img> and download <a>
+  getBlobUrl(img)
+    .then((url) => {
+      if (state.detailImg !== img) return; // user already navigated away
+      detailOpen.href = url;
+      if (isImage(img.name)) detailImg.src = url;
+    })
+    .catch((err) => {
+      console.warn("detail load failed", err);
+    });
 }
 
 function closeDetail() {
   if (typeof modal.close === "function" && modal.open) modal.close();
   else modal.removeAttribute("open");
-  detailImg.src = "";
+  detailImg.removeAttribute("src");
   state.detailImg = null;
 }
 
 detailClose.addEventListener("click", closeDetail);
 modal.addEventListener("click", (e) => { if (e.target === modal) closeDetail(); });
-modal.addEventListener("close", () => { detailImg.src = ""; state.detailImg = null; });
+modal.addEventListener("close", () => { detailImg.removeAttribute("src"); state.detailImg = null; });
 
 detailDelete.addEventListener("click", () => {
   if (state.detailImg) deleteAsset(state.detailImg, detailDelete);
