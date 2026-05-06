@@ -39,9 +39,41 @@ const USERS = {
   viewer: { password: "viewer1234", role: "viewer" },
 };
 
-// in-memory tokens (demo only)
-const TOKENS = new Map();
-const newToken = () => crypto.randomBytes(24).toString("hex");
+// stateless tokens: HMAC-signed payload so any serverless instance can verify
+// without shared state. TOKEN_SECRET must be a stable env var in production.
+const TOKEN_SECRET =
+  process.env.TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
+const TOKEN_TTL_SECONDS = 8 * 60 * 60;
+
+function signToken(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto
+    .createHmac("sha256", TOKEN_SECRET)
+    .update(body)
+    .digest("base64url");
+  return `${body}.${sig}`;
+}
+
+function verifyToken(token) {
+  if (!token || typeof token !== "string") return null;
+  const [body, sig] = token.split(".");
+  if (!body || !sig) return null;
+  const expected = crypto
+    .createHmac("sha256", TOKEN_SECRET)
+    .update(body)
+    .digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(body, "base64url").toString());
+  } catch {
+    return null;
+  }
+  if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+  return payload;
+}
 
 // ---------- AWS clients ----------
 // reader client uses reader-1 creds from .env (proves the read policy)
@@ -99,9 +131,9 @@ async function getUploadClient() {
 // ---------- middlewares ----------
 const auth = (req, res, next) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "");
-  const user = TOKENS.get(token);
-  if (!user) return res.status(401).json({ error: "Unauthorized" });
-  req.user = user;
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: "Unauthorized" });
+  req.user = { username: payload.username, role: payload.role };
   next();
 };
 
@@ -127,14 +159,18 @@ app.post("/api/login", (req, res) => {
   if (!u || u.password !== password) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
-  const token = newToken();
-  TOKENS.set(token, { username, role: u.role });
+  const now = Math.floor(Date.now() / 1000);
+  const token = signToken({
+    username,
+    role: u.role,
+    iat: now,
+    exp: now + TOKEN_TTL_SECONDS,
+  });
   res.json({ token, user: username, role: u.role });
 });
 
-app.post("/api/logout", auth, (req, res) => {
-  const token = (req.headers.authorization || "").replace("Bearer ", "");
-  TOKENS.delete(token);
+app.post("/api/logout", auth, (_req, res) => {
+  // stateless tokens — client just drops it locally
   res.json({ ok: true });
 });
 
