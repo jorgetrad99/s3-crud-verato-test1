@@ -16,7 +16,7 @@
         <button type="submit">Entrar</button>
       </form>
       <div class="hint">
-        <div><strong>admin</strong> / admin1234 &nbsp;<small>(subir + ver)</small></div>
+        <div><strong>admin</strong> / admin1234 &nbsp;<small>(subir + eliminar + ver)</small></div>
         <div><strong>viewer</strong> / viewer1234 &nbsp;<small>(solo ver)</small></div>
       </div>
       <p id="login-error" class="error"></p>
@@ -47,15 +47,25 @@
             <span class="drop-sub">o haz click para seleccionar &middot; cualquier tipo &middot; max 10MB c/u</span>
           </span>
         </button>
-        <div id="bucket-full-banner" class="banner-warn" hidden>
-          <strong>Bucket lleno.</strong> Elimina recursos antes de subir más.
-        </div>
         <div id="selected-files" class="chips" hidden></div>
         <div id="upload-actions" class="upload-actions" hidden>
           <button id="upload-btn">Subir <span id="upload-count">0</span></button>
           <button id="clear-btn" class="ghost">Limpiar</button>
         </div>
         <p id="upload-status"></p>
+        <div id="bucket-full-banner" class="banner-warn" hidden>
+          <strong>Bucket lleno.</strong> Elimina recursos antes de subir más.
+        </div>
+      </section>
+
+      <section id="access-section" hidden>
+        <h2>
+          <span>Quién tiene acceso al bucket</span>
+          <button id="access-refresh-btn" class="ghost">refrescar</button>
+        </h2>
+        <div id="access-content" class="access-content">
+          <p class="empty">Cargando…</p>
+        </div>
       </section>
 
       <section id="gallery-section">
@@ -99,6 +109,8 @@
       </div>
     </dialog>
   </div>
+
+  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1692.0.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

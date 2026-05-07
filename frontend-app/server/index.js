@@ -1,18 +1,12 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import multer from "multer";
 import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  S3Client,
-  ListObjectsV2Command,
-  GetObjectCommand,
-  PutObjectCommand,
-  DeleteObjectCommand,
-} from "@aws-sdk/client-s3";
+import { S3Client, GetBucketPolicyCommand, GetPublicAccessBlockCommand, GetBucketCorsCommand } from "@aws-sdk/client-s3";
 import { STSClient, AssumeRoleCommand } from "@aws-sdk/client-sts";
+import { IAMClient, GetGroupCommand, GetRoleCommand } from "@aws-sdk/client-iam";
 import { fromIni } from "@aws-sdk/credential-providers";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,16 +15,19 @@ dotenv.config({ path: path.join(__dirname, ".env") });
 
 const REGION = process.env.AWS_REGION;
 const BUCKET = process.env.BUCKET_NAME;
-const ROLE_ARN = process.env.ROLE_ARN;
+const UPLOADER_ROLE_ARN = process.env.ROLE_ARN;
+const VIEWER_ROLE_ARN = process.env.VIEWER_ROLE_ARN;
 const EXTERNAL_ID = process.env.EXTERNAL_ID;
 const ADMIN_PROFILE = process.env.AWS_ADMIN_PROFILE || "default";
+const READERS_GROUP = process.env.READERS_GROUP_NAME || "s3-readers";
 const IS_SERVERLESS = !!process.env.VERCEL;
 
 if (!BUCKET) console.error("BUCKET_NAME missing");
-if (!ROLE_ARN) console.warn("ROLE_ARN missing — uploads will fail");
+if (!UPLOADER_ROLE_ARN) console.warn("ROLE_ARN (uploader) missing — admin login will fail");
+if (!VIEWER_ROLE_ARN) console.warn("VIEWER_ROLE_ARN missing — viewer login will fail");
 
-const MAX_BUCKET_OBJECTS = 50;
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const STS_DURATION_SECONDS = 3600;          // 1h temp creds for browser
+const TOKEN_TTL_SECONDS = 8 * 60 * 60;       // 8h app session
 
 // ---------- hardcoded users ----------
 const USERS = {
@@ -38,18 +35,18 @@ const USERS = {
   viewer: { password: "viewer1234", role: "viewer" },
 };
 
-// stateless tokens: HMAC-signed payload so any serverless instance can verify
-// without shared state. TOKEN_SECRET must be a stable env var in production.
+const ROLE_ARN_FOR = {
+  admin:  () => UPLOADER_ROLE_ARN,
+  viewer: () => VIEWER_ROLE_ARN,
+};
+
+// ---------- HMAC tokens (stateless, serverless-friendly) ----------
 const TOKEN_SECRET =
   process.env.TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
-const TOKEN_TTL_SECONDS = 8 * 60 * 60;
 
 function signToken(payload) {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = crypto
-    .createHmac("sha256", TOKEN_SECRET)
-    .update(body)
-    .digest("base64url");
+  const sig = crypto.createHmac("sha256", TOKEN_SECRET).update(body).digest("base64url");
   return `${body}.${sig}`;
 }
 
@@ -57,10 +54,7 @@ function verifyToken(token) {
   if (!token || typeof token !== "string") return null;
   const [body, sig] = token.split(".");
   if (!body || !sig) return null;
-  const expected = crypto
-    .createHmac("sha256", TOKEN_SECRET)
-    .update(body)
-    .digest("base64url");
+  const expected = crypto.createHmac("sha256", TOKEN_SECRET).update(body).digest("base64url");
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
@@ -74,20 +68,12 @@ function verifyToken(token) {
   return payload;
 }
 
-// ---------- AWS clients ----------
-// reader client uses reader-1 creds from .env (proves the read policy)
-const readerClient = new S3Client({
-  region: REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
-
-// upload client: assumes the integration role on demand. In serverless
-// (Vercel) we use ADMIN_AWS_* env credentials; locally we fall back to
-// the named profile in ~/.aws/credentials. Cached until expiry.
-function adminCredentials() {
+// ---------- broker (server-side AWS identity) ----------
+// All sts:AssumeRole calls go through this principal. It NEVER touches S3
+// directly — its only job is to mint scoped temp credentials that the
+// browser uses against S3. AWS (bucket policy + role permissions) is the
+// real enforcer of who can read/write.
+function brokerCredentials() {
   if (process.env.ADMIN_AWS_ACCESS_KEY_ID && process.env.ADMIN_AWS_SECRET_ACCESS_KEY) {
     return {
       accessKeyId: process.env.ADMIN_AWS_ACCESS_KEY_ID,
@@ -97,34 +83,23 @@ function adminCredentials() {
   return fromIni({ profile: ADMIN_PROFILE });
 }
 
-let uploadClientCache = null;
-async function getUploadClient() {
-  const now = Date.now();
-  if (uploadClientCache && uploadClientCache.expiresAt - now > 60_000) {
-    return uploadClientCache.client;
-  }
-  const sts = new STSClient({
-    region: REGION,
-    credentials: adminCredentials(),
-  });
-  const { Credentials } = await sts.send(
+const stsClient = new STSClient({ region: REGION, credentials: brokerCredentials() });
+const iamClient = new IAMClient({ region: REGION, credentials: brokerCredentials() });
+const adminS3Client = new S3Client({ region: REGION, credentials: brokerCredentials() });
+
+async function assumeRoleFor(appUser, requestId) {
+  const arn = ROLE_ARN_FOR[appUser.role]?.();
+  if (!arn) throw new Error(`no role configured for app role ${appUser.role}`);
+  const sessionName = `frontend-${appUser.role}-${appUser.username}-${requestId}`.slice(0, 64);
+  const { Credentials } = await stsClient.send(
     new AssumeRoleCommand({
-      RoleArn: ROLE_ARN,
-      RoleSessionName: "frontend-upload",
+      RoleArn: arn,
+      RoleSessionName: sessionName,
       ExternalId: EXTERNAL_ID,
-      DurationSeconds: 900,
+      DurationSeconds: STS_DURATION_SECONDS,
     })
   );
-  const client = new S3Client({
-    region: REGION,
-    credentials: {
-      accessKeyId: Credentials.AccessKeyId,
-      secretAccessKey: Credentials.SecretAccessKey,
-      sessionToken: Credentials.SessionToken,
-    },
-  });
-  uploadClientCache = { client, expiresAt: new Date(Credentials.Expiration).getTime() };
-  return client;
+  return Credentials;
 }
 
 // ---------- middlewares ----------
@@ -152,161 +127,178 @@ if (!IS_SERVERLESS) {
   app.use(express.static(path.join(__dirname, "..", "client")));
 }
 
-app.post("/api/login", (req, res) => {
+// --- login: authenticate + AssumeRole + return temp AWS creds ---------------
+app.post("/api/login", async (req, res) => {
   const { username, password } = req.body || {};
   const u = USERS[username];
   if (!u || u.password !== password) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
+
+  let creds;
+  try {
+    const requestId = crypto.randomBytes(4).toString("hex");
+    creds = await assumeRoleFor({ username, role: u.role }, requestId);
+  } catch (err) {
+    console.error("[login/assume-role]", err);
+    return res.status(500).json({ error: `AssumeRole failed: ${err.message}` });
+  }
+
   const now = Math.floor(Date.now() / 1000);
-  const token = signToken({
+  const appToken = signToken({
     username,
     role: u.role,
     iat: now,
     exp: now + TOKEN_TTL_SECONDS,
   });
-  res.json({ token, user: username, role: u.role });
+
+  res.json({
+    appToken,
+    user: username,
+    role: u.role,
+    aws: {
+      region: REGION,
+      bucket: BUCKET,
+      credentials: {
+        accessKeyId: creds.AccessKeyId,
+        secretAccessKey: creds.SecretAccessKey,
+        sessionToken: creds.SessionToken,
+        expiration: creds.Expiration,
+      },
+    },
+  });
 });
 
-app.post("/api/logout", auth, (_req, res) => {
-  // stateless tokens — client just drops it locally
-  res.json({ ok: true });
-});
-
-app.get("/api/me", auth, (req, res) => res.json(req.user));
-
-async function listAssets() {
-  const list = await readerClient.send(
-    new ListObjectsV2Command({ Bucket: BUCKET, Prefix: "assets/" })
-  );
-  return (list.Contents || []).filter((o) => o.Size > 0);
-}
-
-app.get("/api/images", auth, async (_req, res) => {
+// --- credentials refresh (avoid forcing re-login every hour) ----------------
+app.post("/api/refresh-creds", auth, async (req, res) => {
   try {
-    const items = await listAssets();
-    const images = items.map((obj) => ({
-      key: obj.Key,
-      name: obj.Key.replace("assets/", ""),
-      size: obj.Size,
-      lastModified: obj.LastModified,
-    }));
+    const requestId = crypto.randomBytes(4).toString("hex");
+    const creds = await assumeRoleFor(req.user, requestId);
     res.json({
-      count: images.length,
-      limit: MAX_BUCKET_OBJECTS,
-      full: images.length >= MAX_BUCKET_OBJECTS,
-      images,
+      credentials: {
+        accessKeyId: creds.AccessKeyId,
+        secretAccessKey: creds.SecretAccessKey,
+        sessionToken: creds.SessionToken,
+        expiration: creds.Expiration,
+      },
     });
   } catch (err) {
-    console.error("[images]", err);
+    console.error("[refresh-creds]", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Auth-proxied download: returns the bytes only to logged-in users.
-// No public/presigned URLs ever leave the server.
-app.get("/api/asset/:filename", auth, async (req, res) => {
-  const { filename } = req.params;
-  if (!filename || filename.includes("/") || filename.includes("..")) {
-    return res.status(400).json({ error: "invalid filename" });
-  }
-  const key = `assets/${filename}`;
+app.post("/api/logout", auth, (_req, res) => res.json({ ok: true }));
+app.get("/api/me", auth, (req, res) => res.json(req.user));
+
+// --- admin-only: who and what currently has access to the bucket -----------
+app.get("/api/access-list", auth, requireAdmin, async (_req, res) => {
   try {
-    const obj = await readerClient.send(
-      new GetObjectCommand({ Bucket: BUCKET, Key: key })
+    const policyResult = await adminS3Client.send(
+      new GetBucketPolicyCommand({ Bucket: BUCKET })
     );
-    if (obj.ContentType) res.setHeader("Content-Type", obj.ContentType);
-    if (obj.ContentLength != null) res.setHeader("Content-Length", obj.ContentLength);
-    res.setHeader("Cache-Control", "private, no-store");
-    obj.Body.pipe(res);
-  } catch (err) {
-    if (err.name === "NoSuchKey" || err.$metadata?.httpStatusCode === 404) {
-      return res.status(404).json({ error: "not found" });
-    }
-    console.error("[asset]", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+    const policy = JSON.parse(policyResult.Policy);
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_BYTES, files: MAX_BUCKET_OBJECTS },
-});
-
-app.post(
-  "/api/upload",
-  auth,
-  requireAdmin,
-  upload.array("files", MAX_BUCKET_OBJECTS),
-  async (req, res) => {
-    const files = req.files || [];
-    if (!files.length) return res.status(400).json({ error: "no files" });
-
-    let currentCount;
-    try {
-      currentCount = (await listAssets()).length;
-    } catch (err) {
-      console.error("[upload/count]", err);
-      return res.status(500).json({ error: `cannot read bucket: ${err.message}` });
+    // pull principals from each statement
+    function principalsFrom(stmt) {
+      const cond = stmt.Condition || {};
+      const arnList =
+        cond.ArnNotLike?.["aws:PrincipalArn"] ||
+        cond.ArnLike?.["aws:PrincipalArn"] || [];
+      return Array.isArray(arnList) ? arnList : [arnList];
     }
 
-    if (currentCount >= MAX_BUCKET_OBJECTS) {
-      return res.status(409).json({
-        error: `bucket lleno (${currentCount}/${MAX_BUCKET_OBJECTS}). Elimina recursos antes de subir más.`,
-        currentCount,
-        limit: MAX_BUCKET_OBJECTS,
-      });
-    }
-    if (currentCount + files.length > MAX_BUCKET_OBJECTS) {
-      const allowed = MAX_BUCKET_OBJECTS - currentCount;
-      return res.status(409).json({
-        error: `solo caben ${allowed} archivo(s) más antes de llegar al límite de ${MAX_BUCKET_OBJECTS}. Estás intentando subir ${files.length}.`,
-        currentCount,
-        limit: MAX_BUCKET_OBJECTS,
-      });
-    }
-
-    let s3;
-    try {
-      s3 = await getUploadClient();
-    } catch (err) {
-      console.error("[assume-role]", err);
-      return res.status(500).json({ error: `AssumeRole failed: ${err.message}` });
-    }
-
-    const results = await Promise.all(
-      files.map(async (f) => {
-        const safeName = f.originalname.replaceAll(/[^A-Za-z0-9._-]/g, "_");
-        const key = `assets/${safeName}`;
-        try {
-          await s3.send(new PutObjectCommand({
-            Bucket: BUCKET,
-            Key: key,
-            Body: f.buffer,
-            ContentType: f.mimetype || "application/octet-stream",
-          }));
-          return { name: f.originalname, ok: true, key };
-        } catch (e) {
-          return { name: f.originalname, ok: false, error: e.message };
-        }
-      })
+    const denyAll = policy.Statement.find((s) =>
+      s.Sid === "DenyDataReadExceptApprovedRoles" || s.Sid === "DenyAllNonAuthorized"
     );
-    const uploaded = results.filter((r) => r.ok).length;
-    res.json({ uploaded, total: files.length, results });
-  }
-);
+    const denyWrite = policy.Statement.find((s) =>
+      s.Sid === "DenyDataWriteExceptUploader" || s.Sid === "DenyWriteForReaders"
+    );
+    const tlsStmt = policy.Statement.find((s) => s.Sid === "EnforceTLS");
 
-app.post("/api/delete", auth, requireAdmin, async (req, res) => {
-  const { key } = req.body || {};
-  if (!key || typeof key !== "string" || !key.startsWith("assets/") || key.includes("..")) {
-    return res.status(400).json({ error: "invalid key" });
-  }
-  try {
-    const s3 = await getUploadClient();
-    await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
-    res.json({ ok: true, key });
+    const readableArns = principalsFrom(denyAll || {});
+    const writableArns = principalsFrom(denyWrite || {});
+
+    const PURPOSE_HINTS = {
+      [process.env.ROLE_NAME || "integration-uploader-role"]:
+        "Admin uploader (assumed via STS by app admin login)",
+      [process.env.VIEWER_ROLE_NAME || "frontend-viewer-role"]:
+        "App viewer (assumed via STS by app viewer login)",
+    };
+
+    function classify(arn) {
+      if (arn.endsWith(":root")) {
+        return { arn, kind: "root", name: "Account root", purpose: "Account-level fallback" };
+      }
+      const m = /:(role|user)\/(.+)$/.exec(arn);
+      if (!m) return { arn, kind: "unknown", name: arn };
+      const [, kind, name] = m;
+      let purpose = PURPOSE_HINTS[name];
+      if (!purpose) {
+        if (name.startsWith("reader-")) purpose = "IAM viewer (direct CLI/SDK access)";
+        else if (kind === "user") purpose = "Operator/maintainer (CLI)";
+        else purpose = "Custom";
+      }
+      return { arn, kind, name, purpose };
+    }
+
+    const principals = readableArns.map(classify);
+    // bucket policy structure: readableArns can do anything except write,
+    // unless they're also in writableArns (which are the write-allowed ones).
+    for (const p of principals) {
+      p.canRead = true;
+      p.canWrite = writableArns.includes(p.arn);
+    }
+
+    // members of s3-readers group (legacy IAM users)
+    let groupMembers = [];
+    try {
+      const g = await iamClient.send(new GetGroupCommand({ GroupName: READERS_GROUP }));
+      groupMembers = (g.Users || []).map((u) => ({ name: u.UserName, arn: u.Arn }));
+    } catch (err) {
+      console.warn("[access-list/group]", err.message);
+    }
+
+    // role descriptions
+    const roleNames = principals.filter((p) => p.kind === "role").map((p) => p.name);
+    const roleDetails = {};
+    for (const rn of roleNames) {
+      try {
+        const r = await iamClient.send(new GetRoleCommand({ RoleName: rn }));
+        roleDetails[rn] = {
+          description: r.Role.Description || "",
+          createDate: r.Role.CreateDate,
+        };
+      } catch { /* role may not exist yet */ }
+    }
+
+    // public access block
+    let bpa = null;
+    try {
+      const r = await adminS3Client.send(
+        new GetPublicAccessBlockCommand({ Bucket: BUCKET })
+      );
+      bpa = r.PublicAccessBlockConfiguration;
+    } catch { /* unset */ }
+
+    // CORS
+    let cors = null;
+    try {
+      const r = await adminS3Client.send(new GetBucketCorsCommand({ Bucket: BUCKET }));
+      cors = r.CORSRules;
+    } catch { /* unset */ }
+
+    res.json({
+      bucket: BUCKET,
+      principals,
+      readersGroup: { name: READERS_GROUP, members: groupMembers },
+      roleDetails,
+      publicAccessBlock: bpa,
+      tlsEnforced: !!tlsStmt,
+      cors,
+    });
   } catch (err) {
-    console.error("[delete]", err);
+    console.error("[access-list]", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -315,10 +307,11 @@ if (!IS_SERVERLESS) {
   const PORT = process.env.PORT || 3001;
   app.listen(PORT, () => {
     console.log(`backend listening on http://localhost:${PORT}`);
-    console.log(`  bucket: ${BUCKET}`);
-    console.log(`  region: ${REGION}`);
-    console.log(`  admin uploader role: ${ROLE_ARN}`);
-    console.log(`  admin profile: ${ADMIN_PROFILE}`);
+    console.log(`  bucket:           ${BUCKET}`);
+    console.log(`  region:           ${REGION}`);
+    console.log(`  uploader role:    ${UPLOADER_ROLE_ARN}`);
+    console.log(`  viewer role:      ${VIEWER_ROLE_ARN}`);
+    console.log(`  broker profile:   ${ADMIN_PROFILE}`);
   });
 }
 

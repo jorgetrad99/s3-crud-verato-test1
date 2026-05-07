@@ -31,31 +31,39 @@ aws s3api put-bucket-ownership-controls \
     --ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerEnforced}]'
 ok "object ownership: BucketOwnerEnforced"
 
-# --- compute exception ARNs ---------------------------------------------------
-CURRENT_ARN=$(caller_arn)
-log "current caller will be added to allow-list: $CURRENT_ARN"
-
+# --- compute principal ARNs ---------------------------------------------------
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
-ROOT_ARN="arn:aws:iam::${ACCOUNT_ID}:root"
+VIEWER_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${VIEWER_ROLE_NAME:-frontend-viewer-role}"
 
-# Build the JSON arrays of allowed principals
-ALLOW_PRINCIPALS=""
-for u in $READER_USERS; do
-    ALLOW_PRINCIPALS+=",\"arn:aws:iam::${ACCOUNT_ID}:user/${u}\""
-done
+log "data access (read/write) allowed only via:"
+log "   - ${ROLE_ARN}            (uploader)"
+log "   - ${VIEWER_ROLE_ARN}     (viewer)"
+log "all other identities — admin-cli, root, reader-1/2 — DENIED on object data."
+log "(management ops like PutBucketPolicy/GetBucketPolicy stay open for the operator's IAM perms.)"
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+# Object-data actions (read/list). Anything else (GetBucketPolicy,
+# PutBucketPolicy, GetPublicAccessBlock, etc.) is NOT denied here, so
+# admin-cli can still manage the bucket via its IAM perms.
 cat > "$TMP/bucket-policy.json" <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "DenyAllNonAuthorized",
+      "Sid": "DenyDataReadExceptApprovedRoles",
       "Effect": "Deny",
       "Principal": "*",
-      "Action": "s3:*",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectAttributes",
+        "s3:GetObjectAcl",
+        "s3:GetObjectVersion",
+        "s3:GetObjectVersionAcl",
+        "s3:ListBucket",
+        "s3:ListBucketVersions"
+      ],
       "Resource": [
         "arn:aws:s3:::${BUCKET}",
         "arn:aws:s3:::${BUCKET}/*"
@@ -64,29 +72,25 @@ cat > "$TMP/bucket-policy.json" <<EOF
         "ArnNotLike": {
           "aws:PrincipalArn": [
             "${ROLE_ARN}",
-            "${ROOT_ARN}",
-            "${CURRENT_ARN}"${ALLOW_PRINCIPALS}
+            "${VIEWER_ROLE_ARN}"
           ]
         }
       }
     },
     {
-      "Sid": "DenyWriteForReaders",
+      "Sid": "DenyDataWriteExceptUploader",
       "Effect": "Deny",
       "Principal": "*",
       "Action": [
         "s3:PutObject",
         "s3:DeleteObject",
+        "s3:DeleteObjectVersion",
         "s3:PutObjectAcl"
       ],
       "Resource": "arn:aws:s3:::${BUCKET}/*",
       "Condition": {
         "ArnNotLike": {
-          "aws:PrincipalArn": [
-            "${ROLE_ARN}",
-            "${ROOT_ARN}",
-            "${CURRENT_ARN}"
-          ]
+          "aws:PrincipalArn": "${ROLE_ARN}"
         }
       }
     },
@@ -121,3 +125,32 @@ ok "bucket policy applied"
 log "verifying"
 aws s3api get-bucket-policy --bucket "$BUCKET" --query Policy --output text \
     | python -m json.tool | head -5
+
+# --- bucket CORS (so the browser can call S3 directly with STS creds) -------
+ORIGINS_JSON=""
+for o in $(echo "${FRONTEND_ORIGINS:-http://localhost:3001}" | tr ',' ' '); do
+    ORIGINS_JSON+=",\"$o\""
+done
+ORIGINS_JSON="[${ORIGINS_JSON:1}]"
+
+cat > "$TMP/cors.json" <<EOF
+{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET", "PUT", "DELETE", "HEAD"],
+      "AllowedOrigins": ${ORIGINS_JSON},
+      "ExposeHeaders": ["ETag", "x-amz-request-id", "x-amz-id-2"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}
+EOF
+
+python -m json.tool "$TMP/cors.json" > /dev/null
+ok "CORS JSON valid; allowed origins: $FRONTEND_ORIGINS"
+
+aws s3api put-bucket-cors \
+    --bucket "$BUCKET" \
+    --cors-configuration "$(aws_file_url "$TMP/cors.json")"
+ok "bucket CORS applied"

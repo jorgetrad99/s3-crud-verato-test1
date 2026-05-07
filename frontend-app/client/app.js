@@ -1,6 +1,10 @@
+/* global AWS */
 const API = "/api";
 const PAGE_SIZE = 6;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const BUCKET_LIMIT_DEFAULT = 50;
+const UPLOAD_CONCURRENCY = 4;
+const KEY_PREFIX = "assets/";
 
 const $ = (id) => document.getElementById(id);
 
@@ -22,6 +26,10 @@ const clearBtn = $("clear-btn");
 const uploadStatus = $("upload-status");
 const capacityLabel = $("capacity-label");
 const bucketFullBanner = $("bucket-full-banner");
+
+const accessSection = $("access-section");
+const accessContent = $("access-content");
+const accessRefreshBtn = $("access-refresh-btn");
 
 const gallery = $("gallery");
 const galleryCount = $("gallery-count");
@@ -46,52 +54,23 @@ const detailDelete = $("detail-delete");
 const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|svg|avif|bmp|ico)$/i;
 
 const state = {
-  token: sessionStorage.getItem("token") || null,
-  user: sessionStorage.getItem("user") || null,
-  role: sessionStorage.getItem("role") || null,
+  appToken: null,
+  user: null,
+  role: null,
+  aws: null,    // { region, bucket, credentials: { accessKeyId, secretAccessKey, sessionToken, expiration } }
+  s3: null,
   pendingFiles: [],
   images: [],
   page: 1,
   detailImg: null,
   bucketCount: 0,
-  bucketLimit: 50,
+  bucketLimit: BUCKET_LIMIT_DEFAULT,
   bucketFull: false,
-  // cacheKey -> blob URL. cacheKey = `${s3key}|${lastModified}` to invalidate on overwrite.
-  blobCache: new Map(),
+  blobCache: new Map(),     // cacheKey -> blobUrl
+  refreshTimer: null,
 };
 
-function cacheKeyOf(item) {
-  return `${item.key}|${item.lastModified}`;
-}
-
-async function getBlobUrl(item) {
-  const ck = cacheKeyOf(item);
-  const cached = state.blobCache.get(ck);
-  if (cached) return cached;
-  const res = await fetch(`${API}/asset/${encodeURIComponent(item.name)}`, {
-    headers: { Authorization: `Bearer ${state.token}` },
-  });
-  if (!res.ok) throw new Error(`asset fetch failed: HTTP ${res.status}`);
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  state.blobCache.set(ck, url);
-  return url;
-}
-
-function revokeOrphans(currentItems) {
-  const valid = new Set(currentItems.map(cacheKeyOf));
-  for (const [k, url] of state.blobCache.entries()) {
-    if (!valid.has(k)) {
-      URL.revokeObjectURL(url);
-      state.blobCache.delete(k);
-    }
-  }
-}
-
-function revokeAllBlobs() {
-  for (const url of state.blobCache.values()) URL.revokeObjectURL(url);
-  state.blobCache.clear();
-}
+restoreSession();
 
 // =============== auth ===============
 loginForm.addEventListener("submit", async (e) => {
@@ -110,8 +89,8 @@ loginForm.addEventListener("submit", async (e) => {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || "login failed");
     }
-    const { token, user, role } = await res.json();
-    saveSession(token, user, role);
+    const data = await res.json();
+    saveSession(data);
     showMain();
   } catch (err) {
     loginError.textContent = err.message;
@@ -119,25 +98,46 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 $("logout").addEventListener("click", async () => {
-  if (state.token) {
+  if (state.appToken) {
     await fetch(`${API}/logout`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${state.token}` },
+      headers: { Authorization: `Bearer ${state.appToken}` },
     }).catch(() => {});
   }
   clearSession();
   showLogin();
 });
 
-function saveSession(token, user, role) {
-  state.token = token; state.user = user; state.role = role;
-  sessionStorage.setItem("token", token);
-  sessionStorage.setItem("user", user);
-  sessionStorage.setItem("role", role);
+function saveSession({ appToken, user, role, aws }) {
+  state.appToken = appToken;
+  state.user = user;
+  state.role = role;
+  state.aws = aws;
+  rebuildS3Client();
+  scheduleCredsRefresh();
+  sessionStorage.setItem("session", JSON.stringify({ appToken, user, role, aws }));
 }
+
+function restoreSession() {
+  const raw = sessionStorage.getItem("session");
+  if (!raw) return;
+  try {
+    const s = JSON.parse(raw);
+    const exp = s.aws?.credentials?.expiration;
+    if (!exp || new Date(exp).getTime() - Date.now() < 60 * 1000) return; // expired/expiring
+    state.appToken = s.appToken;
+    state.user = s.user;
+    state.role = s.role;
+    state.aws = s.aws;
+    rebuildS3Client();
+    scheduleCredsRefresh();
+  } catch { /* ignore */ }
+}
+
 function clearSession() {
+  if (state.refreshTimer) { clearTimeout(state.refreshTimer); state.refreshTimer = null; }
   revokeAllBlobs();
-  state.token = state.user = state.role = null;
+  state.appToken = state.user = state.role = state.aws = state.s3 = null;
   state.pendingFiles = []; state.images = []; state.page = 1;
   state.bucketCount = 0; state.bucketFull = false;
   sessionStorage.clear();
@@ -156,7 +156,55 @@ function showMain() {
   roleBadge.textContent = state.role;
   roleBadge.className = `badge ${state.role}`;
   uploadSection.hidden = state.role !== "admin";
+  accessSection.hidden = state.role !== "admin";
   loadImages();
+  if (state.role === "admin") loadAccessList();
+}
+
+// =============== AWS SDK plumbing ===============
+function rebuildS3Client() {
+  if (!state.aws) { state.s3 = null; return; }
+  const c = state.aws.credentials;
+  state.s3 = new AWS.S3({
+    apiVersion: "2006-03-01",
+    region: state.aws.region,
+    credentials: new AWS.Credentials({
+      accessKeyId: c.accessKeyId,
+      secretAccessKey: c.secretAccessKey,
+      sessionToken: c.sessionToken,
+    }),
+    params: { Bucket: state.aws.bucket },
+  });
+}
+
+function scheduleCredsRefresh() {
+  if (state.refreshTimer) { clearTimeout(state.refreshTimer); }
+  if (!state.aws?.credentials?.expiration) return;
+  const expMs = new Date(state.aws.credentials.expiration).getTime();
+  // refresh 2 minutes before expiry
+  const delay = Math.max(10_000, expMs - Date.now() - 2 * 60 * 1000);
+  state.refreshTimer = setTimeout(refreshCreds, delay);
+}
+
+async function refreshCreds() {
+  try {
+    const res = await fetch(`${API}/refresh-creds`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${state.appToken}` },
+    });
+    if (!res.ok) throw new Error("session expired");
+    const { credentials } = await res.json();
+    state.aws.credentials = credentials;
+    rebuildS3Client();
+    sessionStorage.setItem("session", JSON.stringify({
+      appToken: state.appToken, user: state.user, role: state.role, aws: state.aws,
+    }));
+    scheduleCredsRefresh();
+  } catch (err) {
+    console.warn("creds refresh failed", err);
+    clearSession();
+    showLogin();
+  }
 }
 
 // =============== drop zone ===============
@@ -167,32 +215,23 @@ dropZone.addEventListener("click", () => {
 
 ["dragenter", "dragover"].forEach((evt) => {
   dropZone.addEventListener(evt, (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     if (state.bucketFull) return;
     dropZone.classList.add("is-dragover");
   });
 });
-
 ["dragleave", "drop"].forEach((evt) => {
   dropZone.addEventListener(evt, (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     if (evt === "dragleave" && dropZone.contains(e.relatedTarget)) return;
     dropZone.classList.remove("is-dragover");
   });
 });
-
 dropZone.addEventListener("drop", (e) => {
   if (state.bucketFull) return;
   addFiles(e.dataTransfer.files);
 });
-
-fileInput.addEventListener("change", (e) => {
-  addFiles(e.target.files);
-  e.target.value = "";
-});
-
+fileInput.addEventListener("change", (e) => { addFiles(e.target.files); e.target.value = ""; });
 clearBtn.addEventListener("click", () => {
   state.pendingFiles = [];
   renderChips();
@@ -209,15 +248,12 @@ function addFiles(fileList) {
     existing.add(id);
     state.pendingFiles.push(f);
   }
-
-  // client-side capacity guard
   const remaining = state.bucketLimit - state.bucketCount;
   if (state.pendingFiles.length > remaining) {
     const dropped = state.pendingFiles.length - remaining;
     state.pendingFiles = state.pendingFiles.slice(0, remaining);
     errors.push(`solo caben ${remaining} archivo(s) más; descartados ${dropped}`);
   }
-
   if (errors.length) {
     uploadStatus.className = "error";
     uploadStatus.textContent = errors.join("; ");
@@ -229,10 +265,8 @@ function addFiles(fileList) {
 
 function renderChips() {
   if (state.pendingFiles.length === 0) {
-    selectedFiles.hidden = true;
-    selectedFiles.innerHTML = "";
-    uploadActions.hidden = true;
-    return;
+    selectedFiles.hidden = true; selectedFiles.innerHTML = "";
+    uploadActions.hidden = true; return;
   }
   selectedFiles.hidden = false;
   uploadActions.hidden = false;
@@ -255,7 +289,7 @@ function renderChips() {
   });
 }
 
-// =============== upload ===============
+// =============== upload (direct to S3 with admin temp creds) ===============
 uploadBtn.addEventListener("click", async () => {
   if (state.pendingFiles.length === 0) return;
   if (state.bucketCount + state.pendingFiles.length > state.bucketLimit) {
@@ -264,41 +298,97 @@ uploadBtn.addEventListener("click", async () => {
     return;
   }
 
-  const fd = new FormData();
-  for (const f of state.pendingFiles) fd.append("files", f);
-
-  uploadBtn.disabled = true;
-  clearBtn.disabled = true;
+  uploadBtn.disabled = true; clearBtn.disabled = true;
   uploadStatus.className = "";
-  uploadStatus.textContent = `subiendo ${state.pendingFiles.length} archivo(s)...`;
+  uploadStatus.textContent = `subiendo ${state.pendingFiles.length} archivo(s)…`;
 
-  try {
-    const res = await fetch(`${API}/upload`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${state.token}` },
-      body: fd,
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
-    const failed = (body.results || []).filter((r) => !r.ok);
-    uploadStatus.className = failed.length ? "error" : "success";
-    if (failed.length) {
-      const detail = failed.map((f) => f.name + " (" + f.error + ")").join(", ");
-      uploadStatus.textContent = `${body.uploaded}/${body.total} subidos. fallidos: ${detail}`;
-    } else {
-      uploadStatus.textContent = `${body.uploaded}/${body.total} subidos correctamente`;
+  const queue = [...state.pendingFiles];
+  const results = [];
+  const workers = Array.from({ length: Math.min(UPLOAD_CONCURRENCY, queue.length) }, async () => {
+    while (queue.length) {
+      const f = queue.shift();
+      try {
+        const key = await s3PutObject(f);
+        results.push({ name: f.name, ok: true, key });
+      } catch (err) {
+        results.push({ name: f.name, ok: false, error: err.message || String(err) });
+      }
     }
-    state.pendingFiles = [];
-    renderChips();
-    await loadImages();
-  } catch (err) {
-    uploadStatus.className = "error";
-    uploadStatus.textContent = err.message;
-  } finally {
-    uploadBtn.disabled = false;
-    clearBtn.disabled = false;
+  });
+  await Promise.all(workers);
+
+  const failed = results.filter((r) => !r.ok);
+  uploadStatus.className = failed.length ? "error" : "success";
+  if (failed.length) {
+    const detail = failed.map((f) => f.name + " (" + f.error + ")").join(", ");
+    uploadStatus.textContent = `${results.length - failed.length}/${results.length} subidos. fallidos: ${detail}`;
+  } else {
+    uploadStatus.textContent = `${results.length}/${results.length} subidos correctamente`;
   }
+
+  state.pendingFiles = [];
+  renderChips();
+  uploadBtn.disabled = false; clearBtn.disabled = false;
+  await loadImages();
 });
+
+async function s3PutObject(file) {
+  const safeName = file.name.replaceAll(/[^A-Za-z0-9._-]/g, "_");
+  const key = `${KEY_PREFIX}${safeName}`;
+  await state.s3.putObject({
+    Key: key,
+    Body: file,
+    ContentType: file.type || "application/octet-stream",
+  }).promise();
+  return key;
+}
+
+async function s3DeleteObject(key) {
+  await state.s3.deleteObject({ Key: key }).promise();
+}
+
+async function s3ListObjects() {
+  const res = await state.s3.listObjectsV2({ Prefix: KEY_PREFIX }).promise();
+  return (res.Contents || [])
+    .filter((o) => o.Size > 0)
+    .map((o) => ({
+      key: o.Key,
+      name: o.Key.startsWith(KEY_PREFIX) ? o.Key.slice(KEY_PREFIX.length) : o.Key,
+      size: o.Size,
+      lastModified: o.LastModified,
+    }));
+}
+
+async function s3GetBlob(item) {
+  const res = await state.s3.getObject({ Key: item.key }).promise();
+  // Body is a Uint8Array in the browser
+  return new Blob([res.Body], { type: res.ContentType || "application/octet-stream" });
+}
+
+// =============== blob URL cache ===============
+function cacheKeyOf(item) { return `${item.key}|${item.lastModified}`; }
+
+async function getBlobUrl(item) {
+  const ck = cacheKeyOf(item);
+  const cached = state.blobCache.get(ck);
+  if (cached) return cached;
+  const blob = await s3GetBlob(item);
+  const url = URL.createObjectURL(blob);
+  state.blobCache.set(ck, url);
+  return url;
+}
+
+function revokeOrphans(currentItems) {
+  const valid = new Set(currentItems.map(cacheKeyOf));
+  for (const [k, url] of state.blobCache.entries()) {
+    if (!valid.has(k)) { URL.revokeObjectURL(url); state.blobCache.delete(k); }
+  }
+}
+
+function revokeAllBlobs() {
+  for (const url of state.blobCache.values()) URL.revokeObjectURL(url);
+  state.blobCache.clear();
+}
 
 // =============== gallery + pagination ===============
 refreshBtn.addEventListener("click", () => loadImages());
@@ -310,28 +400,20 @@ nextBtn.addEventListener("click", () => {
 });
 
 async function loadImages() {
-  gallery.innerHTML = '<p class="empty">Cargando...</p>';
+  gallery.innerHTML = '<p class="empty">Cargando…</p>';
   pagination.hidden = true;
   galleryCount.textContent = "";
   try {
-    const res = await fetch(`${API}/images`, {
-      headers: { Authorization: `Bearer ${state.token}` },
-    });
-    if (res.status === 401) { clearSession(); showLogin(); return; }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const { images, count, limit, full } = await res.json();
-    revokeOrphans(images);
-    state.images = images.sort(
-      (a, b) => new Date(b.lastModified) - new Date(a.lastModified)
-    );
-    state.bucketCount = count ?? state.images.length;
-    state.bucketLimit = limit ?? state.bucketLimit;
-    state.bucketFull = !!full || state.bucketCount >= state.bucketLimit;
+    const items = await s3ListObjects();
+    revokeOrphans(items);
+    state.images = items.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+    state.bucketCount = items.length;
+    state.bucketFull = state.bucketCount >= state.bucketLimit;
     state.page = 1;
     updateCapacityUI();
     renderGallery();
   } catch (err) {
-    gallery.innerHTML = `<p class="empty error">${escapeHtml(err.message)}</p>`;
+    gallery.innerHTML = `<p class="empty error">${escapeHtml(err.message || String(err))}</p>`;
   }
 }
 
@@ -412,7 +494,6 @@ function renderRow(img) {
     del.addEventListener("click", () => deleteAsset(img, del));
     row.appendChild(del);
   }
-
   return row;
 }
 
@@ -427,7 +508,6 @@ function buildThumb(img) {
   el.className = "asset-thumb";
   el.alt = "";
   el.loading = "lazy";
-  // src is set asynchronously after fetching the blob via auth
   getBlobUrl(img)
     .then((url) => { el.src = url; })
     .catch((err) => {
@@ -467,16 +547,13 @@ function openDetail(img) {
   if (typeof modal.showModal === "function") modal.showModal();
   else modal.setAttribute("open", "");
 
-  // fetch the blob (auth-proxied), use it for both preview <img> and download <a>
   getBlobUrl(img)
     .then((url) => {
-      if (state.detailImg !== img) return; // user already navigated away
+      if (state.detailImg !== img) return;
       detailOpen.href = url;
       if (isImage(img.name)) detailImg.src = url;
     })
-    .catch((err) => {
-      console.warn("detail load failed", err);
-    });
+    .catch((err) => { console.warn("detail load failed", err); });
 }
 
 function closeDetail() {
@@ -499,24 +576,93 @@ async function deleteAsset(img, button) {
   if (!confirm(`¿Eliminar "${name}" del bucket? Esta acción es irreversible.`)) return;
   if (button) button.disabled = true;
   try {
-    const res = await fetch(`${API}/delete`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${state.token}`,
-      },
-      body: JSON.stringify({ key: img.key }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+    await s3DeleteObject(img.key);
     if (modal.open && state.detailImg && state.detailImg.key === img.key) closeDetail();
     uploadStatus.className = "success";
     uploadStatus.textContent = `eliminado: ${name}`;
     await loadImages();
   } catch (err) {
-    alert(`Error eliminando: ${err.message}`);
+    alert(`Error eliminando: ${err.message || err}`);
     if (button) button.disabled = false;
   }
+}
+
+// =============== access list (admin only) ===============
+accessRefreshBtn.addEventListener("click", () => loadAccessList());
+
+async function loadAccessList() {
+  accessContent.innerHTML = '<p class="empty">Cargando…</p>';
+  try {
+    const res = await fetch(`${API}/access-list`, {
+      headers: { Authorization: `Bearer ${state.appToken}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderAccessList(data);
+  } catch (err) {
+    accessContent.innerHTML = `<p class="empty error">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderAccessList(d) {
+  const rows = (d.principals || []).map((p) => `
+    <tr>
+      <td><span class="kind-pill ${p.kind}">${p.kind}</span></td>
+      <td><strong>${escapeHtml(p.name)}</strong></td>
+      <td class="${p.canRead ? "cap-yes" : "cap-no"}">${p.canRead ? "✓" : "—"}</td>
+      <td class="${p.canWrite ? "cap-yes" : "cap-no"}">${p.canWrite ? "✓" : "—"}</td>
+      <td>${escapeHtml(p.purpose || "")}</td>
+      <td class="arn">${escapeHtml(p.arn)}</td>
+    </tr>
+  `).join("");
+
+  const groupMembers = (d.readersGroup?.members || [])
+    .map((u) => escapeHtml(u.name))
+    .join(", ") || "—";
+
+  const bpa = d.publicAccessBlock || {};
+  const bpaAll = bpa.BlockPublicAcls && bpa.IgnorePublicAcls && bpa.BlockPublicPolicy && bpa.RestrictPublicBuckets;
+
+  const corsOrigins = (d.cors?.[0]?.AllowedOrigins || []).map(escapeHtml).join(", ") || "—";
+
+  accessContent.innerHTML = `
+    <table class="access-table">
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Nombre</th>
+          <th>Read</th>
+          <th>Write</th>
+          <th>Propósito</th>
+          <th>ARN</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div class="access-meta">
+      <div class="access-meta-card">
+        <h4>Bucket</h4>
+        <div class="v v-mono">${escapeHtml(d.bucket)}</div>
+      </div>
+      <div class="access-meta-card">
+        <h4>Block Public Access</h4>
+        <div class="v">${bpaAll ? "✓ ALL ON" : "⚠ partial / off"}</div>
+      </div>
+      <div class="access-meta-card">
+        <h4>TLS enforced</h4>
+        <div class="v">${d.tlsEnforced ? "✓ HTTPS only" : "⚠ no"}</div>
+      </div>
+      <div class="access-meta-card">
+        <h4>CORS origins</h4>
+        <div class="v v-mono">${corsOrigins}</div>
+      </div>
+      <div class="access-meta-card">
+        <h4>Reader IAM group (${escapeHtml(d.readersGroup?.name || "")})</h4>
+        <div class="v">${groupMembers}</div>
+      </div>
+    </div>
+  `;
 }
 
 // =============== utils ===============
@@ -524,24 +670,18 @@ const HTML_ESCAPES = {
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 };
 function escapeHtml(s) {
-  return String(s).replaceAll(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+  return String(s ?? "").replaceAll(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 }
-
-function isImage(name) {
-  return IMAGE_EXTS.test(name);
-}
-
+function isImage(name) { return IMAGE_EXTS.test(name); }
 function extOf(name) {
   const m = /\.([^.]+)$/.exec(name);
   return m ? m[1] : "";
 }
-
 function fmtSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
-
 function fmtDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -551,6 +691,6 @@ function fmtDate(iso) {
   });
 }
 
-// auto-resume
-if (state.token && state.user && state.role) showMain();
+// initial view
+if (state.appToken && state.user && state.role && state.aws) showMain();
 else showLogin();
