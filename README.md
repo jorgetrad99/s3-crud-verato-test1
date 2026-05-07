@@ -1,68 +1,70 @@
 # S3 Restricted Bucket Integration
 
-Integración de un bucket S3 con acceso restringido a un servicio que carga datos y a un set específico de usuarios para lectura. Solución end-to-end con frontend (Express + AWS SDK en browser), bucket hardening vía bucket policy, y broker pattern con STS para emitir credenciales temporales por usuario.
+> 🇪🇸 [Versión en español](README_ES.md)
 
-**Demo en producción:** https://s3-crud-verato-test1.jorgetrad.com
+End-to-end integration of an S3 bucket with restricted access: a service that uploads data and a specific set of users with read access. Frontend (Express + AWS SDK in the browser), bucket hardening via bucket policy, and a broker pattern with STS that issues per-user temporary credentials.
 
-**Repositorio en Github:** https://github.com/jorgetrad99/s3-crud-verato-test1
+**Live demo:** https://s3-crud-verato-test1.jorgetrad.com
+
+**GitHub repository:** https://github.com/jorgetrad99/s3-crud-verato-test1
 
 ---
 
-## La app en acción
+## The app in action
 
-> Capturas tomadas de la versión desplegada en Vercel.
+> Screenshots taken from the version deployed on Vercel.
 
 ### 1. Login
 
-Mismo formulario para los dos perfiles. La app autentica contra usuarios hardcoded (`admin`/`viewer`) y, al validar, llama a STS para emitir credenciales temporales del role correspondiente.
+Same form for both profiles. The app authenticates against hardcoded users (`admin`/`viewer`) and, on success, calls STS to mint temporary credentials for the corresponding role.
 
-![Login screen](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/login.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150143Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=9df29f1a49b26748ff73af62842e9e63cb1393343b6dc818aa9d0abe19504237&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+![Login screen](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/login.png)
 
-### 2. Viewer — solo lectura
+### 2. Viewer — read-only
 
-`viewer` solo ve la galería paginada. Sin zona de upload, sin botones de eliminar, sin panel admin. Sus credenciales temporales corresponden al `frontend-viewer-role` que solo tiene `s3:GetObject` y `s3:ListBucket`.
+`viewer` only sees the paginated gallery. No upload zone, no delete buttons, no admin panel. Their temporary credentials correspond to `frontend-viewer-role`, which only has `s3:GetObject` and `s3:ListBucket`.
 
-![Viewer view](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/viewer-overview.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150115Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=e14e2333ef9888de5729d7324da540ec578e000864b0723a6b745df26def9ddb&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+![Viewer view](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/viewer-overview.png)
 
-### 3. Admin — vista completa
+### 3. Admin — full view
 
-Cuando entra `admin`, aparecen tres secciones:
-- Zona de upload (drag-drop)
-- Tabla "Quién tiene acceso al bucket" (lee la bucket policy en vivo via `/api/access-list`)
-- Galería con botón eliminar por fila
+When `admin` logs in, three sections appear:
+- Upload zone (drag-and-drop)
+- "Who has access to the bucket" table (reads the bucket policy live via `/api/access-list`)
+- Gallery with delete button on each row
 
-![Admin overview](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/03-admin-overview.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150226Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=642d8d6c76f12640aa688f1ad971a8ac2cc561fee562c5384d7813da0afd8deb&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+![Admin overview](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/03-admin-overview.png)
 
-### 4. Panel de acceso (admin)
+### 4. Access panel (admin)
 
-La tabla muestra exactamente los 2 principals que la bucket policy autoriza para datos, más cards informativas con el estado de Block Public Access, TLS, CORS y el grupo IAM legacy.
+The table shows exactly the 2 principals authorized by the bucket policy for data, plus informational cards with the state of Block Public Access, TLS, CORS and the legacy IAM group.
 
-![Access list panel](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/accessliist.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150204Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=5e9bf1f0897789ec8bf65c33041dfb09871f7be48775ce8c361080cb9c003075&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+![Access list panel](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/accessliist.png)
 
-### 5. Drag-and-drop con preview de chips
+### 5. Drag-and-drop with chip preview
 
-Los archivos seleccionados aparecen como chips con tamaño y botón para quitar. El contador `X / 50` muestra la capacidad del bucket en tiempo real.
+Selected files appear as chips with size and a remove button. The `X / 50` counter shows the bucket capacity in real time.
 
-![Drag-drop with chips](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/dragndrop.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150415Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=25fef07367ae391b2e41e07717c293ac66f6227e3aaacf61793c341bd48bfc85&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+![Drag-drop with chips](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/dragndrop.png)
 
-### 6. La prueba de seguridad: presigned URL firmada por `admin-cli` → 403
+### 6. The security test: presigned URL signed by `admin-cli` → 403
 
-El test demuestra que la bucket policy se evalúa **en cada request**, no solo al firmar la URL. `admin-cli` puede generar técnicamente una URL firmada (la firma es un cómputo local, no requiere hablar con S3), pero al usarla, S3 verifica el `aws:PrincipalArn` y aplica el `Deny`.
+The test demonstrates that the bucket policy is evaluated **on every request**, not just at signing time. `admin-cli` can technically generate a signed URL (signing is a local computation, no S3 call needed), but when used, S3 verifies the `aws:PrincipalArn` and applies the `Deny`.
 
-> Nota: no funciona el camino "click Open en la consola de S3" porque después de la última policy, `admin-cli` tampoco puede listar ni abrir el bucket desde la consola web. El test va por **CLI**.
+> Note: the "click Open in the S3 console" path doesn't work either, because after the final policy `admin-cli` can't even list or open the bucket from the web console. The test goes through the **CLI**.
 
-**Paso a paso:**
+**Step by step:**
 
 ```bash
-# 1. Obtener el key de un objeto que ya está en el bucket.
-#    Caminos posibles:
-#    - Login admin en la app, click cualquier asset → copia el campo "Key" del modal
-#    - O navega a https://s3-crud-verato-test1.jorgetrad.com → DevTools → Network → request a S3
-KEY="assets/Improvising_101.pdf"   # ejemplo
+# 1. Get the key of an object already in the bucket.
+#    Possible paths:
+#    - Login as admin in the app, click any asset → copy the "Key" field from the modal
+#    - Or browse to https://s3-crud-verato-test1.jorgetrad.com → DevTools → Network → request to S3
+KEY="assets/Improvising_101.pdf"   # example
 
-# 2. Generar el presigned URL con tus credenciales de admin-cli (perfil default).
-#    `aws s3 presign` solo firma localmente, no llama a S3, así que funciona aunque
-#    admin-cli esté denegado por bucket policy.
+# 2. Generate the presigned URL with your admin-cli credentials (default profile).
+#    `aws s3 presign` only signs locally, doesn't call S3, so it works
+#    even though admin-cli is denied by bucket policy.
 URL=$(aws s3 presign "s3://integration-assets-242032648320/${KEY}" --expires-in 300)
 echo "$URL"
 # Output: https://integration-assets-242032648320.s3.us-east-1.amazonaws.com/assets/...
@@ -70,9 +72,9 @@ echo "$URL"
 #   &X-Amz-Credential=AKIATQWSFECA.../20260507/us-east-1/s3/aws4_request
 #   &X-Amz-Signature=...
 
-# 3. Validar inmediatamente desde la terminal que la URL recién firmada SÍ falla
+# 3. Validate from the terminal that the just-signed URL DOES fail
 curl -i "$URL" | head -20
-# Respuesta esperada:
+# Expected response:
 #   HTTP/1.1 403 Forbidden
 #   <Error>
 #     <Code>AccessDenied</Code>
@@ -82,15 +84,15 @@ curl -i "$URL" | head -20
 #   </Error>
 ```
 
-**4.** Copia esa URL completa (la del paso 2) y pégala en una pestaña **Incognito / InPrivate** del browser.
+**4.** Copy that complete URL (from step 2) and paste it into an **Incognito / InPrivate** browser tab.
 
-**5.** El browser muestra el XML de error de S3 con `<Code>AccessDenied</Code>`. Captura esa pestaña — ese es el screenshot que prueba que la URL no funciona ni siquiera dentro de su TTL de 5 min.
+**5.** The browser shows S3's XML error with `<Code>AccessDenied</Code>`. Capture that tab — that's the screenshot proving the URL doesn't work even within its 5-minute TTL.
 
-![403 from presigned URL](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/AccessDenied.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAGHHHRAIQ%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T151247Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEPD%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIANUeRMyk6%2BLxsdCI%2F%2BJaqF8SNXiSYYEIZq4NfQN4jNqAiEAkjso8PO8h2o%2FEPHCJp8Oxysv2eyvDtuLTlxlw0wiJMkq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDJ6WtRsWvbOClBn1Kyq3AvEvV8vQ15b7Y5osqTYHTMTCpm1tlwYupZNeoAjaxWxTYT0qxynaZL%2BlFK5DWbnZxWLM87VHY%2F%2F4l%2BqDUZY%2Fw4iYnOXyLWSM71plJv4q4gCZ0VA5e2jJXmaxZQTKGNQNWzFSfhwH3Q5ET5U6Hkhc02A1WcEwYPSln4ySnN2Kj2anEhGq7aQ4bv9Hfrbpr5p0zbpsVRoGCq8m5LFRWR1wjZWjZ9L9SAucmlpqkWVZVjmPQqvdhXk7ynpQwNZ%2B0USoMPKIQDw2rpeIWKVn2%2BNQzpr2ZXRuo8bcXp%2B7j%2BcJk1hw5MZMLMZi5mF04yUvtGR77H5tePLZOWJEW%2Bnw3CHJlUZH%2B6o8PjSq4qhK%2FlVSveDCAGZbliniRblOy3%2FtaEGQlWYieB5R4NHPrGRX4ybCsDh2DGOXcUS7MPez8s8GOq0CoyBcb5PE4b7SwrsVzluWVM%2F4xga2ZelYvFe9QlIzHeUwnYL1lQHldZR5lOXSsrQh5hcV1q730qWjsAbo0joZKQ54lPkSjB42%2BqgnSjCYL4H1mIJP7rGvLqIHFo%2BhNchnJN7xOYf6L0qg%2FQHCOBItVbIdt6sroyWbOIkF%2Bl%2F37%2B7ByEkqpFfcdFb%2BvW1B05rZTJcZ6ffyu7pWSQYQdG0dGoLfifZMnDYRQ1afIkwYTHiM9Rt%2BX4IgMDPh2th%2F3tav2jnmHs38azYiIttgWIwF%2B1zBu3m7yuKznufbqvcIlZ5hLB%2BP2AZxmb0%2B5tEss3Om2XFe2IttrRbNbOGZRGiaT4uc2WcKB4yxr4Qj0f4m95ykpCeCSxeCOEZxefx%2F0kGLeJqnQJXzKd4CLJuOiw%3D%3D&X-Amz-Signature=89b150eab55c1121236b625d72fbe59875800bbc512000c248cb87183e3777f2&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+![403 from presigned URL](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/AccessDenied.png)
 
-> **Lo que esto prueba:** aunque la firma sea criptográficamente válida y la URL esté dentro del TTL, la bucket policy se aplica por request. Cualquier identidad **fuera de los 2 roles** (`integration-uploader-role` y `frontend-viewer-role`) recibe 403 — sin importar quién comparta el URL ni desde qué dispositivo.
+> **What this proves:** even with a cryptographically valid signature and the URL within its TTL, the bucket policy is applied per request. Any identity **outside the 2 roles** (`integration-uploader-role` and `frontend-viewer-role`) gets a 403 — regardless of who shares the URL or which device they use.
 
-> **Test contrario (opcional, demuestra que el role SÍ funciona):** asume `frontend-viewer-role`, genera la URL con esas creds temporales, pégala en incognito → **200 OK** (el role está autorizado). Útil para mostrar que el control es por identidad, no por path:
+> **Counter-test (optional, demonstrates that the role DOES work):** assume `frontend-viewer-role`, generate the URL with those temp creds, paste in incognito → **200 OK** (the role is authorized). Useful to show that the control is identity-based, not path-based:
 > ```bash
 > CREDS=$(aws sts assume-role \
 >   --role-arn arn:aws:iam::242032648320:role/frontend-viewer-role \
@@ -102,40 +104,40 @@ curl -i "$URL" | head -20
 > export AWS_SESSION_TOKEN=$(echo "$CREDS" | python -c "import json,sys;print(json.load(sys.stdin)['Credentials']['SessionToken'])")
 >
 > aws s3 presign "s3://integration-assets-242032648320/${KEY}" --expires-in 300
-> # Esa URL sí funciona en incognito durante 300s.
+> # That URL DOES work in incognito for 300s.
 >
-> # Limpia las creds temporales del shell:
+> # Clean up the temp creds from the shell:
 > unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 > ```
 
 ---
 
-## Stack técnico
+## Tech stack
 
-| Capa | Tecnología |
+| Layer | Technology |
 |---|---|
-| **Frontend** | HTML/CSS/JS vanilla · AWS SDK for JavaScript **v2** (cargado por CDN, ejecuta en browser) · `<dialog>` nativo · drag-drop API · `Blob` + `URL.createObjectURL` para preview local |
-| **Backend (Express)** | Node.js 20 (ESM) · Express 4 · `@aws-sdk/client-sts` (AssumeRole) · `@aws-sdk/client-iam` + `@aws-sdk/client-s3` (metadata para el panel admin) · `@aws-sdk/credential-providers` (`fromIni` para dev local) · HMAC-SHA256 (`node:crypto`) para session token · `dotenv` |
-| **AWS** | S3 (bucket + lifecycle + CORS + access logging) · IAM (roles, users, groups, inline policies) · STS (AssumeRole + GetCallerIdentity) · IAM Access Analyzer · CloudTrail (opcional para data events) |
-| **Provisioning** | AWS CLI v2 · scripts bash idempotentes en `scripts/` · `cygpath` para compatibilidad Git Bash en Windows · `python -m json.tool` para validación |
+| **Frontend** | Vanilla HTML/CSS/JS · AWS SDK for JavaScript **v2** (loaded from CDN, runs in browser) · native `<dialog>` · drag-drop API · `Blob` + `URL.createObjectURL` for local preview |
+| **Backend (Express)** | Node.js 20 (ESM) · Express 4 · `@aws-sdk/client-sts` (AssumeRole) · `@aws-sdk/client-iam` + `@aws-sdk/client-s3` (metadata for the admin panel) · `@aws-sdk/credential-providers` (`fromIni` for local dev) · HMAC-SHA256 (`node:crypto`) for the session token · `dotenv` |
+| **AWS** | S3 (bucket + lifecycle + CORS + access logging) · IAM (roles, users, groups, inline policies) · STS (AssumeRole + GetCallerIdentity) · IAM Access Analyzer · CloudTrail (optional for data events) |
+| **Provisioning** | AWS CLI v2 · idempotent bash scripts under `scripts/` · `cygpath` for Git Bash compatibility on Windows · `python -m json.tool` for validation |
 | **Deploy** | Vercel (function + static via `vercel.json` rewrites) · custom domain |
 | **Dev tooling** | Git Bash (MINGW64) · Vercel CLI · GitHub |
 
 ---
 
-## Visión arquitectónica
+## Architecture overview
 
 ```mermaid
 flowchart LR
-    subgraph BROWSER["Browser (cliente)"]
-        UI["SPA HTML/JS<br/>(galería + upload + admin)"]
-        SDK["AWS SDK v2<br/>(creds STS temp)"]
+    subgraph BROWSER["Browser (client)"]
+        UI["SPA HTML/JS<br/>(gallery + upload + admin)"]
+        SDK["AWS SDK v2<br/>(STS temp creds)"]
     end
 
     subgraph VERCEL["Vercel function"]
         APP["Express app<br/>/api/login<br/>/api/refresh-creds<br/>/api/access-list"]
-        BROKER["frontend-broker<br/>(IAM user least-privilege)"]
-        APP -->|usa creds| BROKER
+        BROKER["frontend-broker<br/>(IAM user, least-privilege)"]
+        APP -->|uses creds| BROKER
     end
 
     subgraph AWS["AWS"]
@@ -150,10 +152,10 @@ flowchart LR
     APP -->|"sts:AssumeRole"| STS
     STS -->|"temp creds<br/>(role + sessionToken)"| APP
     APP -->|"creds + appToken"| UI
-    UI -->|"List/Get/Put/Delete<br/>(con creds del role)"| BUCKET
-    IAM -.aplica.-> BUCKET
+    UI -->|"List/Get/Put/Delete<br/>(with role creds)"| BUCKET
+    IAM -.applies.-> BUCKET
     BUCKET -.logs.-> LOGS
-    ANALYZER -.audita.-> BUCKET
+    ANALYZER -.audits.-> BUCKET
 
     classDef awsBox fill:#FF9900,stroke:#232F3E,color:#fff
     classDef cliBox fill:#4A90E2,stroke:#1F3A5F,color:#fff
@@ -163,11 +165,13 @@ flowchart LR
     class APP,BROKER vercelBox
 ```
 
+![Architecture overview](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/architecture-overview.png)
+
 ---
 
-## El reto
+## The challenge
 
-Del enunciado original:
+From the original prompt:
 
 > You are performing an integration with a service that will be loading data into an AWS bucket. You are being requested to restrict the access to this bucket to only allow for the integration to input data into the bucket and for only an specific set of users to be able to access said data.
 >
@@ -177,58 +181,58 @@ Del enunciado original:
 
 ---
 
-## Decisión de arquitectura
+## Architecture decision
 
-Tres opciones evaluadas:
+Three options considered:
 
-| Opción | Pros | Contras | Veredicto |
+| Option | Pros | Cons | Verdict |
 |---|---|---|---|
-| **Proxy de la app (Express con creds del bucket)** | Simple; URLs nunca salen del server | El access control queda en la app, no en AWS; AWS solo ve "una identidad" | ❌ Descartado por no cumplir el espíritu del reto (AWS-native) |
-| **STS broker pattern: cada usuario asume un IAM role distinto** | AWS hace el access control real vía bucket policy + IAM; cada usuario tiene su identidad; trazabilidad por sesión | Las creds temp viven brevemente en el browser | ✅ **Elegido** |
-| **CloudFront + signed cookies** | Bloquea hasta el sharing de URLs (cookie HttpOnly + SameSite) | Setup considerablemente más complejo (distribución, OAC, key pair, dominio) | ⏭️ Mencionado como evolución posible |
+| **App proxy (Express with bucket creds)** | Simple; URLs never leave the server | Access control lives in the app, not in AWS; AWS only sees "one identity" | ❌ Rejected for not meeting the spirit of the challenge (AWS-native) |
+| **STS broker pattern: each user assumes a different IAM role** | AWS does the real access control via bucket policy + IAM; each user has its own identity; per-session traceability | Temp creds briefly live in the browser | ✅ **Chosen** |
+| **CloudFront + signed cookies** | Blocks even URL sharing (HttpOnly + SameSite cookie) | Substantially more complex setup (distribution, OAC, key pair, domain) | ⏭️ Mentioned as a possible evolution |
 
-Con la opción elegida, **la bucket policy es el único enforcement real**; la app solo broker entre `username/password` (hardcoded para la demo) y `sts:AssumeRole`.
+With the chosen option, **the bucket policy is the only real enforcement**; the app is just a broker between `username/password` (hardcoded for the demo) and `sts:AssumeRole`.
 
 ---
 
-## Modelo de permisos final
+## Final permission model
 
-### Quién tiene acceso
+### Who has access
 
-| Principal | Tipo | Read | Write | Propósito |
+| Principal | Type | Read | Write | Purpose |
 |---|---|:--:|:--:|---|
-| `integration-uploader-role` | role | ✓ | ✓ | Asumido por el login admin (sube/borra) |
-| `frontend-viewer-role` | role | ✓ | — | Asumido por el login viewer (solo lee) |
-| `frontend-broker` | user (least-privilege) | — | — | Solo `sts:AssumeRole` sobre los 2 roles + read de metadata para el panel admin |
-| `admin-cli` | user (operator) | — | — | Mantiene gestión del bucket (`PutBucketPolicy`, etc.) pero **denegado** a nivel datos por la bucket policy |
-| `reader-1`, `reader-2` | users (legacy) | — | — | Bucket policy los **deniega** explícitamente — demuestra que el deny gana sobre cualquier IAM allow |
-| Account `root` | n/a | — | — | También denegado a nivel datos; mantiene escape hatch vía modificación de policy |
+| `integration-uploader-role` | role | ✓ | ✓ | Assumed by admin login (uploads/deletes) |
+| `frontend-viewer-role` | role | ✓ | — | Assumed by viewer login (read-only) |
+| `frontend-broker` | user (least-privilege) | — | — | Only `sts:AssumeRole` over the 2 roles + read metadata for the admin panel |
+| `admin-cli` | user (operator) | — | — | Keeps bucket management (`PutBucketPolicy`, etc.) but **denied** at the data level by the bucket policy |
+| `reader-1`, `reader-2` | users (legacy) | — | — | Bucket policy explicitly **denies** them — proves that deny wins over any IAM allow |
+| Account `root` | n/a | — | — | Also denied at the data level; keeps an escape hatch via policy modification |
 
-> **Punto clave:** ningún humano tiene acceso a los datos. Solo los 2 roles asumidos por el broker pueden leer/escribir. Una presigned URL firmada por `admin-cli` o `root` retorna **403** porque la bucket policy se evalúa en cada request.
+> **Key point:** no human has access to the data. Only the 2 roles assumed by the broker can read/write. A presigned URL signed by `admin-cli` or `root` returns **403** because the bucket policy is evaluated on every request.
 
-### Bucket policy (resumen)
+### Bucket policy (summary)
 
-Tres statements:
+Three statements:
 
-1. **`DenyDataReadExceptApprovedRoles`** — niega `s3:GetObject`, `s3:GetObjectAttributes`, `s3:GetObjectAcl`, `s3:GetObjectVersion`, `s3:ListBucket`, etc. para todo principal que no sea uno de los 2 roles.
-2. **`DenyDataWriteExceptUploader`** — niega `s3:PutObject`, `s3:DeleteObject`, `s3:PutObjectAcl` para todo principal que no sea `integration-uploader-role`.
-3. **`EnforceTLS`** — niega `s3:*` si `aws:SecureTransport` es false (HTTPS only).
+1. **`DenyDataReadExceptApprovedRoles`** — denies `s3:GetObject`, `s3:GetObjectAttributes`, `s3:GetObjectAcl`, `s3:GetObjectVersion`, `s3:ListBucket`, etc. for any principal that's not one of the 2 roles.
+2. **`DenyDataWriteExceptUploader`** — denies `s3:PutObject`, `s3:DeleteObject`, `s3:PutObjectAcl` for any principal other than `integration-uploader-role`.
+3. **`EnforceTLS`** — denies `s3:*` if `aws:SecureTransport` is false (HTTPS only).
 
-JSON completo: [`audit-evidence/bucket-policy-applied.json`](audit-evidence/bucket-policy-applied.json) (regenerado en cada `bash scripts/04-bucket-policy.sh`).
+Full JSON: [`audit-evidence/bucket-policy-applied.json`](audit-evidence/bucket-policy-applied.json) (regenerated on each `bash scripts/04-bucket-policy.sh`).
 
-### Cómo evalúa S3 cada request
+### How S3 evaluates each request
 
 ```mermaid
 flowchart TD
-    REQ([Request entra al bucket]) --> TLS{aws:SecureTransport<br/>= true?}
+    REQ([Request hits the bucket]) --> TLS{aws:SecureTransport<br/>= true?}
     TLS -->|No| DENY1([❌ DENIED<br/>EnforceTLS])
-    TLS -->|Sí| METHOD{¿Es operación<br/>de escritura?}
-    METHOD -->|Sí| WRITE{Principal ==<br/>integration-uploader-role?}
+    TLS -->|Yes| METHOD{Is it a write op?}
+    METHOD -->|Yes| WRITE{Principal ==<br/>integration-uploader-role?}
     WRITE -->|No| DENY2([❌ DENIED<br/>DenyDataWriteExceptUploader])
-    WRITE -->|Sí| ALLOW1([✅ ALLOWED])
+    WRITE -->|Yes| ALLOW1([✅ ALLOWED])
     METHOD -->|No| READ{Principal ∈<br/>uploader-role,<br/>viewer-role?}
     READ -->|No| DENY3([❌ DENIED<br/>DenyDataReadExceptApprovedRoles])
-    READ -->|Sí| ALLOW2([✅ ALLOWED])
+    READ -->|Yes| ALLOW2([✅ ALLOWED])
 
     style DENY1 fill:#FF6B6B,color:#000
     style DENY2 fill:#FF6B6B,color:#000
@@ -237,113 +241,119 @@ flowchart TD
     style ALLOW2 fill:#90EE90,color:#000
 ```
 
-**Punto clave:** un `Deny` en bucket policy **siempre gana** sobre cualquier `Allow` en IAM policy. Por eso `reader-1` y `reader-2`, aunque su IAM policy de grupo les permita `s3:GetObject`, son denegados a nivel bucket.
+![S3 evaluation flow](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/S3-evaluation.png)
 
-### Defense-in-depth aplicado
+**Key point:** a `Deny` in a bucket policy **always wins** over any `Allow` in an IAM policy. That's why `reader-1` and `reader-2`, despite their group's IAM policy granting `s3:GetObject`, are denied at the bucket level.
 
-- **Block Public Access:** las 4 opciones ON
-- **Object Ownership:** `BucketOwnerEnforced` (ACLs deshabilitadas)
-- **Server access logging** → bucket separado `<bucket>-access-logs`
-- **IAM Access Analyzer** habilitado a nivel cuenta
-- **Bucket CORS** restringido a los origins del frontend
-- **Trust policy** de los roles con `ExternalId` para evitar confused-deputy
+### Defense-in-depth applied
 
----
-
-## Problemas encontrados (y cómo se resolvieron)
-
-### 1. Presigned URLs filtrables
-
-El primer enfoque generaba URLs firmadas server-side y las pasaba al `<img src>`. Funciona, pero **cualquier persona con esa URL accede al objeto durante 5 min**, sin sesión, desde cualquier dispositivo.
-
-**Solución:** eliminar las presigned URLs. El browser fetchea bytes via SDK con creds temporales, los convierte en `Blob`, y muestra vía `blob:` URL local (no compartible).
-
-### 2. AWS Console permitía abrir objetos vía "Open"
-
-La consola de AWS, al darle "Open" a un objeto, genera una presigned URL con la sesión del usuario actual (`admin-cli` en nuestro caso). Esa URL es publicable durante su TTL. La bucket policy original tenía `admin-cli` en la lista de excepciones, así que el leak existía aunque el frontend no lo expusiera.
-
-**Solución:** la bucket policy ya no tiene a `admin-cli`/`root`/`reader-1`/`reader-2` en la lista de excepciones para datos. **Solo los 2 roles pueden hacer `s3:GetObject`.** Una presigned URL firmada por admin-cli ahora responde 403 incluso con firma válida — la bucket policy se evalúa en cada request.
-
-### 3. Operaciones de gestión sin romper ergonomía
-
-Si denegamos `s3:*` a admin-cli, también pierde `PutBucketPolicy`/`GetBucketPolicy`/`GetPublicAccessBlock` y los scripts de mantenimiento dejan de funcionar.
-
-**Solución:** los `Deny` de la bucket policy listan **acciones específicas de datos** (`s3:GetObject`, `s3:ListBucket`, `s3:PutObject`, etc.) en vez de `s3:*`. Las operaciones de gestión no están en el deny, así que admin-cli sigue siendo el operator.
-
-### 4. Broker en serverless
-
-El backend (Express) en Vercel no puede leer `~/.aws/credentials`. Necesita creds inyectadas vía env vars. Usar las claves permanentes de admin-cli sería excesivo (tienen `s3:*` y más).
-
-**Solución:** un IAM user **`frontend-broker`** con política mínima:
-- `sts:AssumeRole` solo sobre los 2 roles
-- `s3:GetBucketPolicy`/`GetBucketCors`/`GetBucketPublicAccessBlock` (para el panel admin)
-- `iam:GetGroup`/`GetRole` (para el panel admin)
-
-Sus claves van a Vercel como `ADMIN_AWS_ACCESS_KEY_ID/SECRET`. Si se filtran, el blast radius es muy reducido.
+- **Block Public Access:** all 4 options ON
+- **Object Ownership:** `BucketOwnerEnforced` (ACLs disabled)
+- **Server access logging** → separate bucket `<bucket>-access-logs`
+- **IAM Access Analyzer** enabled at account level
+- **Bucket CORS** restricted to frontend origins
+- **Trust policy** on the roles with `ExternalId` to prevent confused-deputy
 
 ---
 
-## Cómo se conecta la app con AWS
+## Issues encountered (and how they were solved)
+
+### 1. Leakable presigned URLs
+
+The first approach generated server-side signed URLs and passed them to the `<img src>`. It works, but **anyone with that URL can access the object for 5 minutes**, no session needed, from any device.
+
+**Solution:** drop presigned URLs entirely. The browser fetches bytes via the SDK with temp creds, converts them to a `Blob`, and renders via local `blob:` URL (not shareable).
+
+### 2. AWS Console allowed opening objects via "Open"
+
+When you click "Open" on an object in the AWS Console, it generates a presigned URL using the current user's session (`admin-cli` in our case). That URL is shareable for its TTL. The original bucket policy had `admin-cli` in the exception list, so the leak existed even though the frontend didn't expose it.
+
+**Solution:** the bucket policy no longer has `admin-cli`/`root`/`reader-1`/`reader-2` in the data-access exception list. **Only the 2 roles can do `s3:GetObject`.** A presigned URL signed by admin-cli now returns 403 even with a valid signature — the bucket policy is evaluated on every request.
+
+### 3. Management operations without breaking ergonomics
+
+If we deny `s3:*` to admin-cli, it also loses `PutBucketPolicy`/`GetBucketPolicy`/`GetPublicAccessBlock` and the maintenance scripts stop working.
+
+**Solution:** the bucket policy `Deny` lists **specific data actions** (`s3:GetObject`, `s3:ListBucket`, `s3:PutObject`, etc.) instead of `s3:*`. Management operations aren't in the deny, so admin-cli remains the operator.
+
+### 4. Broker on serverless
+
+The backend (Express) on Vercel can't read `~/.aws/credentials`. It needs creds injected via env vars. Using admin-cli's permanent keys would be excessive (they have `s3:*` and more).
+
+**Solution:** an IAM user **`frontend-broker`** with a minimal policy:
+- `sts:AssumeRole` only on the 2 roles
+- `s3:GetBucketPolicy`/`GetBucketCors`/`GetBucketPublicAccessBlock` (for the admin panel)
+- `iam:GetGroup`/`GetRole` (for the admin panel)
+
+Its keys go into Vercel as `ADMIN_AWS_ACCESS_KEY_ID/SECRET`. If they leak, the blast radius is very limited.
+
+---
+
+## How the app connects with AWS
 
 ```mermaid
 sequenceDiagram
-    participant U as Usuario (browser)
+    participant U as User (browser)
     participant V as Vercel lambda<br/>(broker)
     participant S as STS
     participant B as S3 bucket
 
-    U->>V: POST /api/login {user,pass}
-    V->>V: validar contra USERS hardcoded
-    V->>S: sts:AssumeRole<br/>(role según user.role)
-    Note right of V: usa creds de<br/>frontend-broker
+    U->>V: POST /api/login {user, pass}
+    V->>V: validate against hardcoded USERS
+    V->>S: sts:AssumeRole<br/>(role per user.role)
+    Note right of V: uses<br/>frontend-broker creds
     S-->>V: temp creds (AccessKey/Secret/SessionToken, exp 1h)
-    V->>V: firmar appToken (HMAC-SHA256)
+    V->>V: sign appToken (HMAC-SHA256)
     V-->>U: {appToken, role, region, bucket, awsCreds}
-    U->>U: AWS.S3 client con awsCreds
+    U->>U: AWS.S3 client with awsCreds
     U->>B: ListObjectsV2 / GetObject / PutObject
-    Note over B: Bucket policy:<br/>permite el role,<br/>niega todo lo demás
-    B-->>U: bytes / lista
-    U->>U: Blob → blob: URL local
+    Note over B: Bucket policy:<br/>allows the role,<br/>denies everything else
+    B-->>U: bytes / list
+    U->>U: Blob → local blob: URL
 ```
 
-- El **appToken** (HMAC stateless, 8h) solo se usa para `/api/access-list` (vista admin) y `/api/refresh-creds`.
-- Las **AWS temp creds** se usan directamente browser ↔ S3 vía AWS SDK.
-- 2 minutos antes de expirar, el cliente hace `POST /api/refresh-creds` para renovar sin re-login.
+![Connection with AWS](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/connection-with-aws.png)
 
-### Flujo de visualización de un asset (sin presigned URL)
+- The **appToken** (stateless HMAC, 8h) is only used for `/api/access-list` (admin view) and `/api/refresh-creds`.
+- The **AWS temp creds** are used directly browser ↔ S3 via the AWS SDK.
+- 2 minutes before expiration, the client calls `POST /api/refresh-creds` to renew without a re-login.
+
+### Asset rendering flow (no presigned URL)
 
 ```mermaid
 sequenceDiagram
-    participant U as Usuario
+    participant U as User
     participant SDK as AWS SDK (browser)
     participant S3 as S3 bucket
     participant Pol as Bucket Policy
     participant DOM as DOM (img tag)
 
-    U->>SDK: click en asset
+    U->>SDK: click on asset
     SDK->>S3: GET /assets/foo.png<br/>(Authorization: AWS4-HMAC-SHA256)
-    S3->>Pol: evalúa request
+    S3->>Pol: evaluates request
     Pol->>Pol: Principal == frontend-viewer-role?
     Pol-->>S3: ✓ ALLOW
     S3-->>SDK: 200 OK + bytes
     SDK->>SDK: new Blob([bytes])
     SDK->>SDK: URL.createObjectURL(blob)
     SDK->>DOM: img.src = "blob:http://..."
-    DOM-->>U: 🖼️ imagen renderizada
+    DOM-->>U: 🖼️ image rendered
 
-    Note over SDK,DOM: blob: URL es local al document.<br/>Copiarla y abrirla en otro tab → no funciona.
+    Note over SDK,DOM: blob: URL is local to the document.<br/>Copying and opening in another tab → doesn't work.
 ```
 
-**Por qué no se filtra:** la URL en el `<img src>` es un `blob:` local del browser, válido solo dentro del documento que lo creó. El "URL real" del objeto en S3 nunca aparece como string compartible — siempre va con `Authorization` header de la request original.
+![Asset rendering flow](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/asset-rendering-flow.png)
+
+**Why it doesn't leak:** the URL in `<img src>` is a local `blob:` from the browser, valid only inside the document that created it. The "real" URL of the object in S3 never appears as a shareable string — it always travels in the `Authorization` header of the original request.
 
 ---
 
-## Recursos AWS desplegados
+## AWS resources deployed
 
-| Recurso | Nombre | Creado por |
+| Resource | Name | Created by |
 |---|---|---|
 | S3 bucket | `integration-assets-242032648320` | `scripts/04-bucket-policy.sh` |
-| Bucket de logs | `integration-assets-242032648320-access-logs` | `scripts/05-access-analyzer.sh` |
+| Logs bucket | `integration-assets-242032648320-access-logs` | `scripts/05-access-analyzer.sh` |
 | IAM role (uploader) | `integration-uploader-role` | `scripts/02-create-role.sh` |
 | IAM role (viewer) | `frontend-viewer-role` | `scripts/06-create-viewer-role.sh` |
 | IAM user (broker) | `frontend-broker` | `scripts/07-create-broker-user.sh` |
@@ -353,168 +363,171 @@ sequenceDiagram
 
 ---
 
-## Comandos usados (CLI)
+## Commands used (CLI)
 
-Todos los scripts son **idempotentes**: re-ejecutarlos no rompe nada, salta lo que ya existe, y reaplica lo configurable.
+All scripts are **idempotent**: re-running them won't break anything, they skip what already exists, and reapply what's configurable.
 
-### Orden de ejecución
+### Execution order
 
 ```mermaid
 flowchart TD
-    PRE([scripts/00-preflight.sh<br/>verifica tools + AWS creds]) --> AUDIT
-    AUDIT([01-audit.sh<br/>snapshot pre-cambios]) --> ROLE
+    PRE([scripts/00-preflight.sh<br/>verify tools + AWS creds]) --> AUDIT
+    AUDIT([01-audit.sh<br/>pre-change snapshot]) --> ROLE
     ROLE([02-create-role.sh<br/>integration-uploader-role]) --> READERS
     READERS([03-create-readers.sh<br/>group + reader-1/2]) --> POLICY
     POLICY([04-bucket-policy.sh<br/>BPA + ownership + policy + CORS]) --> ANALYZER
     ANALYZER([05-access-analyzer.sh<br/>analyzer + access logs]) --> VIEWER
     VIEWER([06-create-viewer-role.sh<br/>frontend-viewer-role]) --> BROKER
     BROKER([07-create-broker-user.sh<br/>frontend-broker user]) --> APPLY
-    APPLY([04-bucket-policy.sh<br/>RE-aplicar con viewer-role<br/>en exception list])
+    APPLY([04-bucket-policy.sh<br/>RE-apply with viewer-role<br/>in exception list])
     APPLY --> VERIFY
-    VERIFY([99-verify.sh<br/>tests E2E])
+    VERIFY([99-verify.sh<br/>E2E tests])
 
     style POLICY fill:#FFB347,color:#000
     style APPLY fill:#FFB347,color:#000
     style VERIFY fill:#90EE90,color:#000
 ```
 
-> ⚠️ **Punto de no retorno:** el script `04` en su segunda corrida (después de Phase 6) aplica el `Deny` definitivo. A partir de ahí solo los 2 roles pueden tocar datos. Asegúrate de tener tu broker creado antes (Phase 7) si vas a usar la app desde Vercel.
+![Execution order](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/execution-order.png)
+
+> ⚠️ **Point of no return:** the second run of script `04` (after Phase 6) applies the definitive `Deny`. From that moment on, only the 2 roles can touch data. Make sure the broker is created (Phase 7) before that if you'll use the app from Vercel.
 
 ```bash
-# Variables resueltas dinámicamente desde STS GetCallerIdentity
+# Variables resolved dynamically from STS GetCallerIdentity
 source .envrc
 
-# Phase 1 — Snapshot del estado actual del bucket / IAM (antes de cambios)
+# Phase 1 — Snapshot of the current bucket / IAM state (before changes)
 bash scripts/01-audit.sh
 # Output: audit-evidence/{bucket-policy-before.json, iam-users.txt, iam-roles.txt, ...}
 
-# Phase 2 — Role para uploads (asumido por el login admin)
+# Phase 2 — Role for uploads (assumed by the admin login)
 bash scripts/02-create-role.sh
-# Crea: integration-uploader-role
-# Inline policy: s3:PutObject, DeleteObject, GetObject, ListBucket en el bucket
-# Trust policy: AccountRoot + condition StringEquals sts:ExternalId
+# Creates: integration-uploader-role
+# Inline policy: s3:PutObject, DeleteObject, GetObject, ListBucket on the bucket
+# Trust policy: AccountRoot + StringEquals sts:ExternalId condition
 
-# Phase 3 — IAM users + grupo legacy (demo de defense-in-depth)
+# Phase 3 — Legacy IAM users + group (defense-in-depth demo)
 bash scripts/03-create-readers.sh
-# Crea: s3-readers group, reader-1, reader-2
-# Inline policy del grupo: s3:GetObject, ListBucket
-# (Estos users serán DENEGADOS por la bucket policy en Phase 4 — defense-in-depth)
+# Creates: s3-readers group, reader-1, reader-2
+# Group inline policy: s3:GetObject, ListBucket
+# (These users will be DENIED by the bucket policy in Phase 4 — defense-in-depth)
 
-# Phase 4 — Hardening del bucket
+# Phase 4 — Bucket hardening
 bash scripts/04-bucket-policy.sh
-# - Block Public Access ON (las 4 opciones)
+# - Block Public Access ON (all 4 options)
 # - Object Ownership: BucketOwnerEnforced
 # - Bucket policy: 3 statements (DenyDataReadExceptApprovedRoles, DenyDataWriteExceptUploader, EnforceTLS)
-# - CORS: solo $FRONTEND_ORIGINS
+# - CORS: only $FRONTEND_ORIGINS
 
 # Phase 5 — Audit + logging
 bash scripts/05-access-analyzer.sh
 # - IAM Access Analyzer (Account-level)
-# - Bucket de access logs + server access logging activado
+# - Access logs bucket + server access logging enabled
 
-# Phase 6 — Role para read-only (asumido por el login viewer)
+# Phase 6 — Read-only role (assumed by the viewer login)
 bash scripts/06-create-viewer-role.sh
-# Crea: frontend-viewer-role
+# Creates: frontend-viewer-role
 # Inline policy: s3:GetObject, ListBucket (NO write)
 
-# Phase 7 — Broker user para Vercel (least-privilege)
+# Phase 7 — Broker user for Vercel (least-privilege)
 bash scripts/07-create-broker-user.sh
-# Crea: frontend-broker
-# Inline policy: sts:AssumeRole sobre los 2 roles + iam:GetGroup/GetRole + s3:GetBucket{Policy,Cors,PublicAccessBlock}
-# Genera access keys → audit-evidence/frontend-broker-keys.json (chmod 600)
+# Creates: frontend-broker
+# Inline policy: sts:AssumeRole on the 2 roles + iam:GetGroup/GetRole + s3:GetBucket{Policy,Cors,PublicAccessBlock}
+# Generates access keys → audit-evidence/frontend-broker-keys.json (chmod 600)
 ```
 
-### Lectura del estado vivo
+### Reading live state
 
 ```bash
-# Ver bucket policy actual
+# Show current bucket policy
 aws s3api get-bucket-policy --bucket $BUCKET --query Policy --output text | python -m json.tool
 
-# Ver Block Public Access
+# Show Block Public Access state
 aws s3api get-public-access-block --bucket $BUCKET
 
-# Ver CORS
+# Show CORS
 aws s3api get-bucket-cors --bucket $BUCKET
 
-# Verificar que admin-cli está denegado a leer datos
+# Confirm admin-cli is denied for data
 aws s3 ls s3://$BUCKET/   # → AccessDenied
 
-# Verificar que el role asumido sí puede leer
+# Confirm the assumed role CAN read
 aws sts assume-role --role-arn arn:aws:iam::$ACCOUNT_ID:role/$VIEWER_ROLE_NAME \
   --role-session-name test --external-id $EXTERNAL_ID
-# (luego export AWS_ACCESS_KEY_ID, SECRET, SESSION_TOKEN y aws s3 ls $BUCKET → OK)
+# (then export AWS_ACCESS_KEY_ID, SECRET, SESSION_TOKEN and aws s3 ls $BUCKET → OK)
 ```
 
 ---
 
-## Cómo hacerlo desde la AWS Console (UI)
+## How to do it from the AWS Console (UI)
 
-Aquí los pasos equivalentes para hacer cada cosa por la consola web.
+Equivalent steps to do each thing through the web console.
 
-### Phase 1 — Auditar el estado actual del bucket
+### Phase 1 — Audit the current bucket state
 
-1. **S3** → seleccionar el bucket → tab **Permissions**
-2. Capturar el JSON de **Bucket policy** (puede estar vacío)
-3. Revisar **Block public access**, **Access Control List**, **Object Ownership**
-4. **IAM** → **Users** y **Roles** → exportar listas
+1. **S3** → select the bucket → **Permissions** tab
+2. Capture the **Bucket policy** JSON (may be empty)
+3. Review **Block public access**, **Access Control List**, **Object Ownership**
+4. **IAM** → **Users** and **Roles** → export lists
 
-> 📸 _Screenshot: tab Permissions del bucket_  
-> ![pre-state](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/bucket-permision-tab.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAPY3SOUE7%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T141954Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIQDlajV%2FXTimhNawmCUVIMO5C5SlruBc1JMyi%2FOdjGFPYAIgV4WMV%2Fx5drnnTseMiWwDROjrqbnrQdtiK9I%2FTnPR7mMq4wIIt%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDHp%2FNpDe9mbSqUCJ4Sq3AixVLeh38GABPYCcFp1S4BsTq7s105WwSddA2VWhZh2jqER4OdThXs63z11IknI0G1psdg%2Bav6C12LzIt8HJEZcwQr5fqG6akYd7IQppq0AwkboVV3agPM9d7o6h3N6dOdZZOsLtfUkIHOwrCnepNPUS7hqJyH6PfZM0IjeS1SSXrF3y%2BpvxyzD1ip05%2BzKjL9ou1xRlCwXD7I%2FxVS1ku8Ak7BMVLbpGYKbvzqGWiXsAeAenRfFb271BWSYp5tDM%2BCJZR1vgTM8Qn6E3G7%2B6SR9g8N7ThcT1Oedme%2FEgVEZs%2B%2Bnm1tr46e6zjioWzDKFwFSwToYo35knfOChEa7iLmtqboUe%2BAECp54HpiF6FyM8ztICxOaFgOllujHpFzbKUs5eQ%2FoY94aI%2Fb09VNeI2uFUMaU9HG9mMPez8s8GOq0C2WaLZVdwr8FQvqzCLU8k4Qxwzaesdc%2BdonF%2Fn6SjE4y62uB5fpBXO2l%2FaBbTeO7ngm4ESQEuWtUUN7GGeo%2BsTb2W06CVFAzi7DadlZoyWZcmSgjmqKHweSSQ3lBghrkIffWxrsdRA6guAzF5TjfeL6Ekh%2FyYhvlikFVZ4cRLoC8LFgp2XLOhviPNim%2BwtjpQcPBhZ2lfrWlI5bC74yqH7woZlP3DP7ZxY0iKNjlOsgCBKE5Ea1pTwRMdFaGquq804MmvAvRCfzQZypSxWZfd7sHjYFRo9%2FVNoaVwAw7%2FCBEKxD44fdHBiR4NIuR5dK8oy7o4o%2BHpy0%2FMq9I32Q10t0Vqk85NPljutJqX%2Bpcd%2BaryPIchEkR1ir56ip9DIvsbQUFO%2F5JyRf7RIFn6Og%3D%3D&X-Amz-Signature=1ec02924e20a17c58ea1dee04ce93eb75422854e10e51ce991323d206eebec94&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> 📸 _Screenshot: bucket Permissions tab_  
+> ![pre-state](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/bucket-permision-tab.png)
 
-> 📸 _Screenshot: Bucket policy en JSON_  
-> ![pre-state](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/bucket-permision-tab.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAPY3SOUE7%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T142019Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIQDlajV%2FXTimhNawmCUVIMO5C5SlruBc1JMyi%2FOdjGFPYAIgV4WMV%2Fx5drnnTseMiWwDROjrqbnrQdtiK9I%2FTnPR7mMq4wIIt%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDHp%2FNpDe9mbSqUCJ4Sq3AixVLeh38GABPYCcFp1S4BsTq7s105WwSddA2VWhZh2jqER4OdThXs63z11IknI0G1psdg%2Bav6C12LzIt8HJEZcwQr5fqG6akYd7IQppq0AwkboVV3agPM9d7o6h3N6dOdZZOsLtfUkIHOwrCnepNPUS7hqJyH6PfZM0IjeS1SSXrF3y%2BpvxyzD1ip05%2BzKjL9ou1xRlCwXD7I%2FxVS1ku8Ak7BMVLbpGYKbvzqGWiXsAeAenRfFb271BWSYp5tDM%2BCJZR1vgTM8Qn6E3G7%2B6SR9g8N7ThcT1Oedme%2FEgVEZs%2B%2Bnm1tr46e6zjioWzDKFwFSwToYo35knfOChEa7iLmtqboUe%2BAECp54HpiF6FyM8ztICxOaFgOllujHpFzbKUs5eQ%2FoY94aI%2Fb09VNeI2uFUMaU9HG9mMPez8s8GOq0C2WaLZVdwr8FQvqzCLU8k4Qxwzaesdc%2BdonF%2Fn6SjE4y62uB5fpBXO2l%2FaBbTeO7ngm4ESQEuWtUUN7GGeo%2BsTb2W06CVFAzi7DadlZoyWZcmSgjmqKHweSSQ3lBghrkIffWxrsdRA6guAzF5TjfeL6Ekh%2FyYhvlikFVZ4cRLoC8LFgp2XLOhviPNim%2BwtjpQcPBhZ2lfrWlI5bC74yqH7woZlP3DP7ZxY0iKNjlOsgCBKE5Ea1pTwRMdFaGquq804MmvAvRCfzQZypSxWZfd7sHjYFRo9%2FVNoaVwAw7%2FCBEKxD44fdHBiR4NIuR5dK8oy7o4o%2BHpy0%2FMq9I32Q10t0Vqk85NPljutJqX%2Bpcd%2BaryPIchEkR1ir56ip9DIvsbQUFO%2F5JyRf7RIFn6Og%3D%3D&X-Amz-Signature=87510bfa4ce97aed961d188c484f57c436ddfc6e851518d102511a81757b8f91&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> 📸 _Screenshot: bucket policy JSON_  
+> ![pre-state](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/bucket-permision-tab.png)
 
-> 📸 _Screenshot: lista de IAM users / roles_  
-> ![iam-list](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/access-managment-roles.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAPY3SOUE7%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T142550Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIQDlajV%2FXTimhNawmCUVIMO5C5SlruBc1JMyi%2FOdjGFPYAIgV4WMV%2Fx5drnnTseMiWwDROjrqbnrQdtiK9I%2FTnPR7mMq4wIIt%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDHp%2FNpDe9mbSqUCJ4Sq3AixVLeh38GABPYCcFp1S4BsTq7s105WwSddA2VWhZh2jqER4OdThXs63z11IknI0G1psdg%2Bav6C12LzIt8HJEZcwQr5fqG6akYd7IQppq0AwkboVV3agPM9d7o6h3N6dOdZZOsLtfUkIHOwrCnepNPUS7hqJyH6PfZM0IjeS1SSXrF3y%2BpvxyzD1ip05%2BzKjL9ou1xRlCwXD7I%2FxVS1ku8Ak7BMVLbpGYKbvzqGWiXsAeAenRfFb271BWSYp5tDM%2BCJZR1vgTM8Qn6E3G7%2B6SR9g8N7ThcT1Oedme%2FEgVEZs%2B%2Bnm1tr46e6zjioWzDKFwFSwToYo35knfOChEa7iLmtqboUe%2BAECp54HpiF6FyM8ztICxOaFgOllujHpFzbKUs5eQ%2FoY94aI%2Fb09VNeI2uFUMaU9HG9mMPez8s8GOq0C2WaLZVdwr8FQvqzCLU8k4Qxwzaesdc%2BdonF%2Fn6SjE4y62uB5fpBXO2l%2FaBbTeO7ngm4ESQEuWtUUN7GGeo%2BsTb2W06CVFAzi7DadlZoyWZcmSgjmqKHweSSQ3lBghrkIffWxrsdRA6guAzF5TjfeL6Ekh%2FyYhvlikFVZ4cRLoC8LFgp2XLOhviPNim%2BwtjpQcPBhZ2lfrWlI5bC74yqH7woZlP3DP7ZxY0iKNjlOsgCBKE5Ea1pTwRMdFaGquq804MmvAvRCfzQZypSxWZfd7sHjYFRo9%2FVNoaVwAw7%2FCBEKxD44fdHBiR4NIuR5dK8oy7o4o%2BHpy0%2FMq9I32Q10t0Vqk85NPljutJqX%2Bpcd%2BaryPIchEkR1ir56ip9DIvsbQUFO%2F5JyRf7RIFn6Og%3D%3D&X-Amz-Signature=6045302f30158a8ba5c8ef92ea4965a2a5c349de946aa2546838421a610f5c04&X-Amz-SignedHeaders=host&response-content-disposition=inline)
-> ![iam-list](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/users.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAPY3SOUE7%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T142529Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIQDlajV%2FXTimhNawmCUVIMO5C5SlruBc1JMyi%2FOdjGFPYAIgV4WMV%2Fx5drnnTseMiWwDROjrqbnrQdtiK9I%2FTnPR7mMq4wIIt%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDHp%2FNpDe9mbSqUCJ4Sq3AixVLeh38GABPYCcFp1S4BsTq7s105WwSddA2VWhZh2jqER4OdThXs63z11IknI0G1psdg%2Bav6C12LzIt8HJEZcwQr5fqG6akYd7IQppq0AwkboVV3agPM9d7o6h3N6dOdZZOsLtfUkIHOwrCnepNPUS7hqJyH6PfZM0IjeS1SSXrF3y%2BpvxyzD1ip05%2BzKjL9ou1xRlCwXD7I%2FxVS1ku8Ak7BMVLbpGYKbvzqGWiXsAeAenRfFb271BWSYp5tDM%2BCJZR1vgTM8Qn6E3G7%2B6SR9g8N7ThcT1Oedme%2FEgVEZs%2B%2Bnm1tr46e6zjioWzDKFwFSwToYo35knfOChEa7iLmtqboUe%2BAECp54HpiF6FyM8ztICxOaFgOllujHpFzbKUs5eQ%2FoY94aI%2Fb09VNeI2uFUMaU9HG9mMPez8s8GOq0C2WaLZVdwr8FQvqzCLU8k4Qxwzaesdc%2BdonF%2Fn6SjE4y62uB5fpBXO2l%2FaBbTeO7ngm4ESQEuWtUUN7GGeo%2BsTb2W06CVFAzi7DadlZoyWZcmSgjmqKHweSSQ3lBghrkIffWxrsdRA6guAzF5TjfeL6Ekh%2FyYhvlikFVZ4cRLoC8LFgp2XLOhviPNim%2BwtjpQcPBhZ2lfrWlI5bC74yqH7woZlP3DP7ZxY0iKNjlOsgCBKE5Ea1pTwRMdFaGquq804MmvAvRCfzQZypSxWZfd7sHjYFRo9%2FVNoaVwAw7%2FCBEKxD44fdHBiR4NIuR5dK8oy7o4o%2BHpy0%2FMq9I32Q10t0Vqk85NPljutJqX%2Bpcd%2BaryPIchEkR1ir56ip9DIvsbQUFO%2F5JyRf7RIFn6Og%3D%3D&X-Amz-Signature=258833df3cbc5d69ac0db3fddfe2f7615d5b44b3dc314d433c770ed62c12c649&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> 📸 _Screenshot: IAM users / roles list_  
+> ![iam-list](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/access-managment-roles.png)
+> ![iam-list](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/users.png)
 
 ---
 
-### Phase 2 — Crear el role uploader (`integration-uploader-role`)
+### Phase 2 — Create the uploader role (`integration-uploader-role`)
 
 1. **IAM** → **Roles** → **Create role**
 2. *Trusted entity type:* **AWS account** → **This account**
-3. Marcar **Require external ID** y poner `integration-upload-2025`
-4. **Next** → omitir attach permissions (las haremos inline)
+3. Tick **Require external ID** and enter `integration-upload-2025`
+4. **Next** → skip attach permissions (we'll do it inline)
 5. *Role name:* `integration-uploader-role` → **Create role**
-6. Abrir el role → **Permissions** → **Add permissions** → **Create inline policy**
-7. Tab **JSON** → pegar el contenido de `scripts/02-create-role.sh` (sección permission policy)
+6. Open the role → **Permissions** → **Add permissions** → **Create inline policy**
+7. **JSON** tab → paste the contents of `scripts/02-create-role.sh` (permission policy section)
 8. *Name:* `S3UploadPolicy` → **Create policy**
+
 ---
 
-### Phase 3 — Crear group `s3-readers` + users `reader-1`, `reader-2`
+### Phase 3 — Create the `s3-readers` group + `reader-1`, `reader-2` users
 
 1. **IAM** → **User groups** → **Create group** → name `s3-readers`
 2. Skip attach permissions; **Create group**
-3. Abrir el group → **Permissions** → **Add permissions** → **Create inline policy** → JSON con `s3:GetObject` + `s3:ListBucket` sobre el bucket → name `S3ReadOnlyAccess`
+3. Open the group → **Permissions** → **Add permissions** → **Create inline policy** → JSON with `s3:GetObject` + `s3:ListBucket` over the bucket → name `S3ReadOnlyAccess`
 4. **IAM** → **Users** → **Create user**
-5. Username: `reader-1` → **Add user to group** → marcar `s3-readers` → **Create user**
-6. Abrir `reader-1` → **Security credentials** → **Create access key** → *Application running outside AWS* → guardar el .csv
-7. Repetir para `reader-2`
+5. Username: `reader-1` → **Add user to group** → tick `s3-readers` → **Create user**
+6. Open `reader-1` → **Security credentials** → **Create access key** → *Application running outside AWS* → save the .csv
+7. Repeat for `reader-2`
 
-> 📸 _Screenshot: grupo con inline policy_  
-> ![group-policy](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/s3-readers.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAPOUW77OU%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T143104Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIQDBG7lPkQO%2FDYmtYPs7hZtWpyzvxqxm1Nnn76lwa63i8gIgN9qzWG1zJjR29SMsRy1K%2Bshk2hh1E6ONFXF%2BKMdolMAq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDEPvN9gKXnLYsbi4hCq3AnOQkRAD%2FHVwY65kUYXlQTfQjeC9k6sRW9YScPAe7lWc9yci68b8TgENZS%2BZfHTa%2BS5tdRx1%2FfkyLU3SiAl9aC0%2FToOETybF6W3bpgrNPEdwnGS3JAy0Y5CnjEv15AwI%2F0Rrse7MY0pc1ZmnMP7tL5XYcjDkOcrlDdYlGuACfDN3WuJF3AIjcdeLgXji3SYT%2F9EU58EI2o1Uh67R0RvPcIiaaxPk8uyZ01gnmQ%2BKKjAnj1sY%2FNC7TmVNc7mP8aho8ooP6MMv1jf25txObQKm%2FpQQ9Te7yTn27zMQQr0%2FwGP%2FbdMz92G3G3TyqldtIobpPMU5F%2BsEXuT57Qi%2BjflBv9me%2B0zNtoXynSb%2BCvtZDpEB5NreJHZIWSwmosk912GUW3WMuclB9%2B8eaudkBsXZjtcVhyQgaJh%2BMPez8s8GOq0Cx4qItJXkUrZD9K9ZUnB9X%2FEH%2F8OX%2B%2BYchafSPTjucdHHEHru1zHAG3mwvDJIbuvoLbBBYJiRcA0FJ52nlBbu%2BlBvnObMjB2FAIi97KNx86JwhMcHv7fhF%2Fke4kR8hP0augqPtyDPeiR7k4WtGbh2j%2B3EKnSo4IVWNRPM5aWumBLq9Q3y4lxZhoK7PPRvaRCTNDqmwUtWzJ1suPBMWhPl89dgT81VuWpsWpKL40jmPH52OYhbTnjHPtzhH%2F3AoMCNebGLxuZrvH3hzGQ7IBxkMl6ARup%2FCr2eIdyaOJbZ7eC%2BOiCa7hjIg3qqdkD5K2tDiM5CXIaxNxxffkcEk0gImy5wJrrK7JMTPoAzjHDUOUONMnfvJePU1Wgrb%2BS9R1fhQwhe6QXfbq5rU7QoyA%3D%3D&X-Amz-Signature=53911fb5351cea303146f3f2d08d70ecd5430821a13172e00e40268ad7d485d9&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> 📸 _Screenshot: group with inline policy_  
+> ![group-policy](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/s3-readers.png)
 
-> 📸 _Screenshot: user en el grupo_  
-> ![user-in-group](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/users-in-group.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAPOUW77OU%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T143124Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIQDBG7lPkQO%2FDYmtYPs7hZtWpyzvxqxm1Nnn76lwa63i8gIgN9qzWG1zJjR29SMsRy1K%2Bshk2hh1E6ONFXF%2BKMdolMAq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDEPvN9gKXnLYsbi4hCq3AnOQkRAD%2FHVwY65kUYXlQTfQjeC9k6sRW9YScPAe7lWc9yci68b8TgENZS%2BZfHTa%2BS5tdRx1%2FfkyLU3SiAl9aC0%2FToOETybF6W3bpgrNPEdwnGS3JAy0Y5CnjEv15AwI%2F0Rrse7MY0pc1ZmnMP7tL5XYcjDkOcrlDdYlGuACfDN3WuJF3AIjcdeLgXji3SYT%2F9EU58EI2o1Uh67R0RvPcIiaaxPk8uyZ01gnmQ%2BKKjAnj1sY%2FNC7TmVNc7mP8aho8ooP6MMv1jf25txObQKm%2FpQQ9Te7yTn27zMQQr0%2FwGP%2FbdMz92G3G3TyqldtIobpPMU5F%2BsEXuT57Qi%2BjflBv9me%2B0zNtoXynSb%2BCvtZDpEB5NreJHZIWSwmosk912GUW3WMuclB9%2B8eaudkBsXZjtcVhyQgaJh%2BMPez8s8GOq0Cx4qItJXkUrZD9K9ZUnB9X%2FEH%2F8OX%2B%2BYchafSPTjucdHHEHru1zHAG3mwvDJIbuvoLbBBYJiRcA0FJ52nlBbu%2BlBvnObMjB2FAIi97KNx86JwhMcHv7fhF%2Fke4kR8hP0augqPtyDPeiR7k4WtGbh2j%2B3EKnSo4IVWNRPM5aWumBLq9Q3y4lxZhoK7PPRvaRCTNDqmwUtWzJ1suPBMWhPl89dgT81VuWpsWpKL40jmPH52OYhbTnjHPtzhH%2F3AoMCNebGLxuZrvH3hzGQ7IBxkMl6ARup%2FCr2eIdyaOJbZ7eC%2BOiCa7hjIg3qqdkD5K2tDiM5CXIaxNxxffkcEk0gImy5wJrrK7JMTPoAzjHDUOUONMnfvJePU1Wgrb%2BS9R1fhQwhe6QXfbq5rU7QoyA%3D%3D&X-Amz-Signature=661958d9fda77a4f3fac935c9e35fde7f378d6fa66f9fa0f84687a94d965e2df&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> 📸 _Screenshot: user in the group_  
+> ![user-in-group](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/users-in-group.png)
 
 ---
 
 ### Phase 4 — Bucket hardening
 
-1. **S3** → bucket → **Permissions** → **Block public access (bucket settings)** → **Edit** → marcar las 4 → **Save**
-2. **Object Ownership** → **Edit** → seleccionar **ACLs disabled (recommended)** → **Save**
-3. **Bucket policy** → **Edit** → pegar el JSON de las 3 statements (con tu Account ID y bucket sustituidos) → **Save changes**
-4. **CORS configuration** → **Edit** → pegar el array de `CORSRules` con tus origins → **Save changes**
+1. **S3** → bucket → **Permissions** → **Block public access (bucket settings)** → **Edit** → tick all 4 → **Save**
+2. **Object Ownership** → **Edit** → select **ACLs disabled (recommended)** → **Save**
+3. **Bucket policy** → **Edit** → paste the JSON with the 3 statements (substituting your Account ID and bucket) → **Save changes**
+4. **CORS configuration** → **Edit** → paste the `CORSRules` array with your origins → **Save changes**
 
 > 📸 _Screenshot: Block Public Access ON_  
-> ![bpa](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/block-public-access.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECADHVSSXUY%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T143514Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCcH6wONjnlc8R2jAx%2Bp6iEu%2FH8Cg5E1Bnke7rDfZ3dAQIhALq7FPPimtQHKDlnlw8jGU%2BPKY1DaiRMxlYWMFZwl%2FCaKuMCCLj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQABoMMjQyMDMyNjQ4MzIwIgxlYxHsbhbzpmyq59IqtwJMFB0JHJGDl1LNimYKHY1VrooZwE1rP79KNPPJEU54GDnUu%2BQg1N0E6tKfflB9tYhLVe6i0nHRx2g523%2BpD2VvkzHvwqEqDqOCzt%2BWNId5NVRgdU2x5TlJiWaPqCKzCX1mrPD%2BJrI0LfkvPgCNVK9%2BdsutroTz8SMIkdihDBFk9HWZlDpdZWQs9Wjfd2%2FXtO3qFKn1S8RvC3j2IA6ia8czSTuOJhdBV6LukfuwDXD30Cr5YWi50LnL2Reyy1COE%2FqyKqvRk%2B42g9nDKo1uUHsCpRzr08UqSsf4G3TJWDrWfvQWpSIgxTx3Hub%2FMukvYZ5ZrUsHPKkC2DmRKe85p1rjjQxVO5vzv6ok3V%2FDVFlaCWKJEnTmOTFIBW44Ib6FR9kPnwiRZfcW7Ua%2FzuB01Mg0BaeyqaFvTzD3s%2FLPBjqsArqIiIV3yCMMHxahtSYMqpeT4bg2mXOgAkfu2Q%2BB1H6fEzTsQG59%2Botk4qzDB9yC4NMatwGZKHZOF2BSoUBQStMSZk57hrnMisADIwNr1eG%2BvAMsssfE%2BHknawZwI3%2BQWn68Gw4HeTiG3AsxaUmyd%2FMQEYvMRkTyFh%2Fi%2FnywpBeiIqdoLhRNp6SHzgmfzWijRMbfptWLupvJjjvG%2F%2F0pzefrO8aFUJOqtFwgm69EbQ1YDw4KqqeEwiaXkGHw3nRJF1hQNfJ%2FDdg2fTi5dc9ne2WEC1RzKUf5eP03XcjCPIBr9SRTejiO6KsaN%2FVWQ16cA8CE6xjix0dg6nr1ey%2Ft305Kev0SgTYT3Df33mbXVaoiKgOjebSZyKOqfWO7dRKNuaQt50q61k1SI7Pj2g%3D%3D&X-Amz-Signature=f5c45054c922b871a5b0bfcd432e4d3813047fa4877bcdd6c5a7ca5208748adc&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> ![bpa](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/block-public-access.png)
 
-> 📸 _Screenshot: bucket policy JSON aplicada_  
-> ![bucket-policy](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/Bucket%20policy.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECADHVSSXUY%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T143625Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCcH6wONjnlc8R2jAx%2Bp6iEu%2FH8Cg5E1Bnke7rDfZ3dAQIhALq7FPPimtQHKDlnlw8jGU%2BPKY1DaiRMxlYWMFZwl%2FCaKuMCCLj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQABoMMjQyMDMyNjQ4MzIwIgxlYxHsbhbzpmyq59IqtwJMFB0JHJGDl1LNimYKHY1VrooZwE1rP79KNPPJEU54GDnUu%2BQg1N0E6tKfflB9tYhLVe6i0nHRx2g523%2BpD2VvkzHvwqEqDqOCzt%2BWNId5NVRgdU2x5TlJiWaPqCKzCX1mrPD%2BJrI0LfkvPgCNVK9%2BdsutroTz8SMIkdihDBFk9HWZlDpdZWQs9Wjfd2%2FXtO3qFKn1S8RvC3j2IA6ia8czSTuOJhdBV6LukfuwDXD30Cr5YWi50LnL2Reyy1COE%2FqyKqvRk%2B42g9nDKo1uUHsCpRzr08UqSsf4G3TJWDrWfvQWpSIgxTx3Hub%2FMukvYZ5ZrUsHPKkC2DmRKe85p1rjjQxVO5vzv6ok3V%2FDVFlaCWKJEnTmOTFIBW44Ib6FR9kPnwiRZfcW7Ua%2FzuB01Mg0BaeyqaFvTzD3s%2FLPBjqsArqIiIV3yCMMHxahtSYMqpeT4bg2mXOgAkfu2Q%2BB1H6fEzTsQG59%2Botk4qzDB9yC4NMatwGZKHZOF2BSoUBQStMSZk57hrnMisADIwNr1eG%2BvAMsssfE%2BHknawZwI3%2BQWn68Gw4HeTiG3AsxaUmyd%2FMQEYvMRkTyFh%2Fi%2FnywpBeiIqdoLhRNp6SHzgmfzWijRMbfptWLupvJjjvG%2F%2F0pzefrO8aFUJOqtFwgm69EbQ1YDw4KqqeEwiaXkGHw3nRJF1hQNfJ%2FDdg2fTi5dc9ne2WEC1RzKUf5eP03XcjCPIBr9SRTejiO6KsaN%2FVWQ16cA8CE6xjix0dg6nr1ey%2Ft305Kev0SgTYT3Df33mbXVaoiKgOjebSZyKOqfWO7dRKNuaQt50q61k1SI7Pj2g%3D%3D&X-Amz-Signature=b0c16cd8f1daf2e71389aa01de49be4e107df303a704912cefa474ae84c90485&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> 📸 _Screenshot: bucket policy JSON applied_  
+> ![bucket-policy](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/Bucket%20policy.png)
 
 > 📸 _Screenshot: CORS rules_  
-> ![cors](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/cors-policypng.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECADHVSSXUY%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T143436Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCcH6wONjnlc8R2jAx%2Bp6iEu%2FH8Cg5E1Bnke7rDfZ3dAQIhALq7FPPimtQHKDlnlw8jGU%2BPKY1DaiRMxlYWMFZwl%2FCaKuMCCLj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQABoMMjQyMDMyNjQ4MzIwIgxlYxHsbhbzpmyq59IqtwJMFB0JHJGDl1LNimYKHY1VrooZwE1rP79KNPPJEU54GDnUu%2BQg1N0E6tKfflB9tYhLVe6i0nHRx2g523%2BpD2VvkzHvwqEqDqOCzt%2BWNId5NVRgdU2x5TlJiWaPqCKzCX1mrPD%2BJrI0LfkvPgCNVK9%2BdsutroTz8SMIkdihDBFk9HWZlDpdZWQs9Wjfd2%2FXtO3qFKn1S8RvC3j2IA6ia8czSTuOJhdBV6LukfuwDXD30Cr5YWi50LnL2Reyy1COE%2FqyKqvRk%2B42g9nDKo1uUHsCpRzr08UqSsf4G3TJWDrWfvQWpSIgxTx3Hub%2FMukvYZ5ZrUsHPKkC2DmRKe85p1rjjQxVO5vzv6ok3V%2FDVFlaCWKJEnTmOTFIBW44Ib6FR9kPnwiRZfcW7Ua%2FzuB01Mg0BaeyqaFvTzD3s%2FLPBjqsArqIiIV3yCMMHxahtSYMqpeT4bg2mXOgAkfu2Q%2BB1H6fEzTsQG59%2Botk4qzDB9yC4NMatwGZKHZOF2BSoUBQStMSZk57hrnMisADIwNr1eG%2BvAMsssfE%2BHknawZwI3%2BQWn68Gw4HeTiG3AsxaUmyd%2FMQEYvMRkTyFh%2Fi%2FnywpBeiIqdoLhRNp6SHzgmfzWijRMbfptWLupvJjjvG%2F%2F0pzefrO8aFUJOqtFwgm69EbQ1YDw4KqqeEwiaXkGHw3nRJF1hQNfJ%2FDdg2fTi5dc9ne2WEC1RzKUf5eP03XcjCPIBr9SRTejiO6KsaN%2FVWQ16cA8CE6xjix0dg6nr1ey%2Ft305Kev0SgTYT3Df33mbXVaoiKgOjebSZyKOqfWO7dRKNuaQt50q61k1SI7Pj2g%3D%3D&X-Amz-Signature=c409bd248d31d762165817b1be9b8efb97b2a6194e44ee3cbe593b0d005f88fa&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> ![cors](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/cors-policypng.png)
 
 ---
 
@@ -522,74 +535,74 @@ Aquí los pasos equivalentes para hacer cada cosa por la consola web.
 
 1. **IAM** → **Access Analyzer** → **Analyzers** → **Create analyzer**
 2. *Type:* **Account analyzer** → name `account-bucket-analyzer` → **Create**
-3. **S3** → crear el bucket de logs `<bucket>-access-logs` (Block Public Access ON desde el inicio)
-4. Ir al bucket original → **Properties** → **Server access logging** → **Edit** → **Enable** → target `<bucket>-access-logs/logs/` → **Save**
+3. **S3** → create the logs bucket `<bucket>-access-logs` (Block Public Access ON from the start)
+4. Go to the original bucket → **Properties** → **Server access logging** → **Edit** → **Enable** → target `<bucket>-access-logs/logs/` → **Save**
 
 > 📸 _Screenshot: Access Analyzer findings_  
-> ![analyzer](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/analyzer_settings.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECADHVSSXUY%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T144051Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCcH6wONjnlc8R2jAx%2Bp6iEu%2FH8Cg5E1Bnke7rDfZ3dAQIhALq7FPPimtQHKDlnlw8jGU%2BPKY1DaiRMxlYWMFZwl%2FCaKuMCCLj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQABoMMjQyMDMyNjQ4MzIwIgxlYxHsbhbzpmyq59IqtwJMFB0JHJGDl1LNimYKHY1VrooZwE1rP79KNPPJEU54GDnUu%2BQg1N0E6tKfflB9tYhLVe6i0nHRx2g523%2BpD2VvkzHvwqEqDqOCzt%2BWNId5NVRgdU2x5TlJiWaPqCKzCX1mrPD%2BJrI0LfkvPgCNVK9%2BdsutroTz8SMIkdihDBFk9HWZlDpdZWQs9Wjfd2%2FXtO3qFKn1S8RvC3j2IA6ia8czSTuOJhdBV6LukfuwDXD30Cr5YWi50LnL2Reyy1COE%2FqyKqvRk%2B42g9nDKo1uUHsCpRzr08UqSsf4G3TJWDrWfvQWpSIgxTx3Hub%2FMukvYZ5ZrUsHPKkC2DmRKe85p1rjjQxVO5vzv6ok3V%2FDVFlaCWKJEnTmOTFIBW44Ib6FR9kPnwiRZfcW7Ua%2FzuB01Mg0BaeyqaFvTzD3s%2FLPBjqsArqIiIV3yCMMHxahtSYMqpeT4bg2mXOgAkfu2Q%2BB1H6fEzTsQG59%2Botk4qzDB9yC4NMatwGZKHZOF2BSoUBQStMSZk57hrnMisADIwNr1eG%2BvAMsssfE%2BHknawZwI3%2BQWn68Gw4HeTiG3AsxaUmyd%2FMQEYvMRkTyFh%2Fi%2FnywpBeiIqdoLhRNp6SHzgmfzWijRMbfptWLupvJjjvG%2F%2F0pzefrO8aFUJOqtFwgm69EbQ1YDw4KqqeEwiaXkGHw3nRJF1hQNfJ%2FDdg2fTi5dc9ne2WEC1RzKUf5eP03XcjCPIBr9SRTejiO6KsaN%2FVWQ16cA8CE6xjix0dg6nr1ey%2Ft305Kev0SgTYT3Df33mbXVaoiKgOjebSZyKOqfWO7dRKNuaQt50q61k1SI7Pj2g%3D%3D&X-Amz-Signature=babaa49fcd553f735f9433eca99720220d255e7c9901a0c65c5fcdb589af7cd8&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> ![analyzer](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/analyzer_settings.png)
 
-> 📸 _Screenshot: server access logging activado_  
-> ![logging](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/server-access-logging.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECADHVSSXUY%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T144108Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQCcH6wONjnlc8R2jAx%2Bp6iEu%2FH8Cg5E1Bnke7rDfZ3dAQIhALq7FPPimtQHKDlnlw8jGU%2BPKY1DaiRMxlYWMFZwl%2FCaKuMCCLj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQABoMMjQyMDMyNjQ4MzIwIgxlYxHsbhbzpmyq59IqtwJMFB0JHJGDl1LNimYKHY1VrooZwE1rP79KNPPJEU54GDnUu%2BQg1N0E6tKfflB9tYhLVe6i0nHRx2g523%2BpD2VvkzHvwqEqDqOCzt%2BWNId5NVRgdU2x5TlJiWaPqCKzCX1mrPD%2BJrI0LfkvPgCNVK9%2BdsutroTz8SMIkdihDBFk9HWZlDpdZWQs9Wjfd2%2FXtO3qFKn1S8RvC3j2IA6ia8czSTuOJhdBV6LukfuwDXD30Cr5YWi50LnL2Reyy1COE%2FqyKqvRk%2B42g9nDKo1uUHsCpRzr08UqSsf4G3TJWDrWfvQWpSIgxTx3Hub%2FMukvYZ5ZrUsHPKkC2DmRKe85p1rjjQxVO5vzv6ok3V%2FDVFlaCWKJEnTmOTFIBW44Ib6FR9kPnwiRZfcW7Ua%2FzuB01Mg0BaeyqaFvTzD3s%2FLPBjqsArqIiIV3yCMMHxahtSYMqpeT4bg2mXOgAkfu2Q%2BB1H6fEzTsQG59%2Botk4qzDB9yC4NMatwGZKHZOF2BSoUBQStMSZk57hrnMisADIwNr1eG%2BvAMsssfE%2BHknawZwI3%2BQWn68Gw4HeTiG3AsxaUmyd%2FMQEYvMRkTyFh%2Fi%2FnywpBeiIqdoLhRNp6SHzgmfzWijRMbfptWLupvJjjvG%2F%2F0pzefrO8aFUJOqtFwgm69EbQ1YDw4KqqeEwiaXkGHw3nRJF1hQNfJ%2FDdg2fTi5dc9ne2WEC1RzKUf5eP03XcjCPIBr9SRTejiO6KsaN%2FVWQ16cA8CE6xjix0dg6nr1ey%2Ft305Kev0SgTYT3Df33mbXVaoiKgOjebSZyKOqfWO7dRKNuaQt50q61k1SI7Pj2g%3D%3D&X-Amz-Signature=bae434f41e07757f5d77b58922c2d76469b421d654a08d3036991a406bf2e72f&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> 📸 _Screenshot: server access logging enabled_  
+> ![logging](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/server-access-logging.png)
 
 ---
 
-### Phase 6 — Crear el role viewer (`frontend-viewer-role`)
+### Phase 6 — Create the viewer role (`frontend-viewer-role`)
 
-Mismos pasos que Phase 2, pero:
+Same steps as Phase 2, but:
 - *Role name:* `frontend-viewer-role`
-- Inline policy con SOLO `s3:GetObject`, `s3:GetObjectAttributes`, `s3:ListBucket`, `s3:GetBucketLocation` (sin write)
+- Inline policy with ONLY `s3:GetObject`, `s3:GetObjectAttributes`, `s3:ListBucket`, `s3:GetBucketLocation` (no write)
 - *Description:* `Frontend viewer (read-only) role assumed via STS`
 
 > 📸 _Screenshot: viewer role summary_  
-> ![viewer-role](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/frontend-viewer-role.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECADEUUC6XF%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T144531Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIDcFSYbsm6D5sidNsxJWYX0F0tPOq8iJv8Yz4sYc2AIHAiEAlg%2BgyGZUDE11sJfHtRzug3DmrkyO5QaVcksTuhsVS%2FMq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDKrJk1MAITTUGeKEyyq3ApjBt10obESt5pc9nrtAemwiSBYJTlIcMeqbH4GefcdTVc9vZqFpMjcngUS1r4EYZ%2BM7W57S2CQDwGab2pwwJDNzCxOgwXFV3vt5vtHKwFmxb7rXLe2aKfEXxx1cSN3p6jdR2t5HnyAZVo9OcrKkS0vkOm9pCvY8YqsIRivtiumWVovGieOzNnxQjGMKOQ59rZ05j%2FV7ZoSDThTpvHjaATGxyu%2F%2BmTVGMKzn%2FZ5MXxPgUgUfp5r7xrLVWetZIO%2Fm%2B41AduShJPsoY2hjiRpZV2auOonDVzNzymUACmcpRcmCjuANPboWo4Iid6svpIqei2fY%2Bl3BaiBEk2L1qdSyz2y7fL3Uc6W2Rkhhnw22EA4GAJVJBON0eCe38BfkkheIn7dtKVanAa%2FehfAONKFSXrCL6DUxSgj0MPez8s8GOq0CVWM1Yp11daZ7D2I6DZmOsKqr6XsBb%2F9bituPpBlgbWcwzQQjlkKBLxuAUMlNJmi7J8NiBqpMURzMIyC2qA3Z49qyGU1a5OZqZV6qqR9SMW8CGqjDMBlRZCwLb23sPQH6zvsSh%2FyolgHOiDgkIKvViuf%2F055B4ptD40UHG%2BaMIpDsyx0AzGHEDnQOnJng%2FTwO98HhziU3%2BSPiIpmyiWzLXTnnjQpt%2Blmqe7OVhuktuKJGMzHpITQnQAhGS9PHZ6MudEVuBnuiaiS2OswjDLFApqR9pU%2B4i58QDr6bfQ3F6IDC0Df7BavCnG%2FGycfnPZYuv%2FDMfZBjeGIRtUZlCnFLvHDl3q1mbXEJy%2B8tm4Y1qvZRAEOBLFuu9Y0K%2BlibCC1PwOZjuGPXUVX4SpPJNA%3D%3D&X-Amz-Signature=2f2b10856b1957769150bc9ca5bb522cdf5ac81c2efacf0a1f8f0bf3a430f253&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> ![viewer-role](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/frontend-viewer-role.png)
 
 ---
 
-### Phase 7 — Crear el broker user (`frontend-broker`)
+### Phase 7 — Create the broker user (`frontend-broker`)
 
 1. **IAM** → **Users** → **Create user** → name `frontend-broker`
 2. **Do NOT** add to any group; skip attach policies
-3. Abrir el user → **Permissions** → **Add permissions** → **Create inline policy** → JSON con `sts:AssumeRole` sobre los 2 role ARNs + las 3 s3:GetBucket* + iam:GetGroup/GetRole → name `FrontendBrokerPolicy`
-4. **Security credentials** → **Create access key** → *Application running outside AWS* → guardar el `.csv` (lo necesitarás para Vercel)
+3. Open the user → **Permissions** → **Add permissions** → **Create inline policy** → JSON with `sts:AssumeRole` on the 2 role ARNs + the 3 s3:GetBucket* + iam:GetGroup/GetRole → name `FrontendBrokerPolicy`
+4. **Security credentials** → **Create access key** → *Application running outside AWS* → save the `.csv` (you'll need it for Vercel)
 
 > 📸 _Screenshot: broker user inline policy_  
-> ![broker](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/frontend-broker-permission-policies.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAOSER32Q5%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T144753Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIQCLZhl0qv4cEUmgdT66RmIpA0tUqfTusdVy816gVhQ36wIgGIiDbIg4a9QiwDFaeT8VcnJFcDO3w1nPjC%2F2qs0HrMIq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNUHVZMn%2BtYGFmzKLiq3ApVkaZRJvYPYPLLyR1eRu5etcJBD5HTB5WHcCUFtaJ1H3BS8T%2BS4skLwu8ASoS1OB%2BMyQHA9itqBjvAdTNxE4pZaeAjtUooehDGQpsO8O8oTo8B0nveivoWUXXVPzNmbo6Ol9vrZRDMUjpBuh5uKDsOXYXAWPjVpoG273%2FBTh2BBVpHic8czfDLUOSNSwdtDZ%2F1eAkgeZrxqI0WkemKUusyUFbgKi%2BiWN%2BwSw9PZfN0sn6WEy8Wz%2BHiL6L0UJYeSI3qRJ3uXgZeGJYiAn3wzxqRKM4jjNjLaGmMD%2FBOFiy63%2BO2vgpHc9fC7S4MnC0%2FXgDnhEG35zRpcMVPSzqZuEWRL5isjfiDao3sQLLIa8eRqmtrQFXUtNjig6YK0ftv2GZnOpHmu7NWPWtljGegXtv1Ve29QTnxUMPez8s8GOq0CShiohcsdvPg2R%2BnR8KFGXDBBc7DrJaofx07PnI4c0TDxvBlgmzGOJhTcJ2G3n9j%2FkL0Oydc7xLQ%2FYkVDN4B64q3RhYmWL%2ByV5d4HmTIGe7mDE57bgRaBStvhDfM2y4gx2WerMf7%2BZv3TeqfqTufeSpK7PhQCWxODsoxOamnwZn6Lgbs3tdTrVwBcnAsjwSwUDFKu%2BAHUhz5pIDmUrh2U2FuJVXpH7Ays9JvZWaRD4ro197KLRI%2BXUK0f9wlcdlH1z5NYUhJt%2Bx6MD6cAw0GZeBSAA0CWcKBzf0wZn8asUQ5geKFH0czMP6LJ3Q3OxM3UAoCocah3zsy8a7q%2BABtlcUrGInD%2FQGd9qXvGMJ0lPV5z3EvhmJKORorJpNwnQ5m9Az1jSt1kvVodhjPZZg%3D%3D&X-Amz-Signature=287b896ea48ee64a213d3b2a58cd9305dca8295e05167bb21f69261cbfbef5f3&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+> ![broker](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/frontend-broker-permission-policies.png)
 
 ---
 
-## Cómo correr la app
+## How to run the app
 
 ### Local
 
 ```bash
-# 1. Instalar deps del server
+# 1. Install server deps
 cd frontend-app/server
 npm install
 
-# 2. .env del server (copiar de .env.example, rellenar)
+# 2. Server .env (copy from .env.example, fill in)
 cp .env.example .env
-# Editar BUCKET_NAME, ROLE_ARN, VIEWER_ROLE_ARN, TOKEN_SECRET, AWS_ADMIN_PROFILE
+# Edit BUCKET_NAME, ROLE_ARN, VIEWER_ROLE_ARN, TOKEN_SECRET, AWS_ADMIN_PROFILE
 
-# 3. Levantar
+# 3. Start
 npm start
 # → http://localhost:3001
 ```
 
 Login:
-- `admin` / `admin1234` → asume `integration-uploader-role` (read+write)
-- `viewer` / `viewer1234` → asume `frontend-viewer-role` (read-only)
+- `admin` / `admin1234` → assumes `integration-uploader-role` (read+write)
+- `viewer` / `viewer1234` → assumes `frontend-viewer-role` (read-only)
 
 ### Vercel
 
-Ya desplegado en https://s3-crud-verato-test1.jorgetrad.com (alias del proyecto `s3-crud-verato`).
+Already deployed at https://s3-crud-verato-test1.jorgetrad.com (alias of project `s3-crud-verato`).
 
-Pasos del setup (one-time):
+One-time setup steps:
 
 ```bash
 cd frontend-app
 vercel link --project s3-crud-verato
 
-# Subir las 11 env vars desde audit-evidence/vercel.env
+# Push the 11 env vars from audit-evidence/vercel.env
 while IFS='=' read -r key value; do
   [ -z "$key" ] && continue
   printf '%s' "$value" | vercel env add "$key" production --force
@@ -598,30 +611,30 @@ done < ../audit-evidence/vercel.env
 vercel deploy --prod
 ```
 
-Tras el primer deploy, añadir el dominio Vercel a `FRONTEND_ORIGINS` en `.envrc` y re-correr `bash scripts/04-bucket-policy.sh` para actualizar el CORS del bucket.
+After the first deploy, add the Vercel domain to `FRONTEND_ORIGINS` in `.envrc` and re-run `bash scripts/04-bucket-policy.sh` to update bucket CORS.
 
 ---
 
-## Verificación
+## Verification
 
 ```bash
 bash scripts/99-verify.sh
 ```
 
-Tests automáticos (todos deben PASS):
-- Reader puede listar
-- Reader **no** puede subir
-- Conexión HTTP plain rechazada (TLS condition)
-- Role puede subir vía AssumeRole
+Automated tests (all should PASS):
+- Reader can list
+- Reader **cannot** upload
+- Plain HTTP connection rejected (TLS condition)
+- Role can upload via AssumeRole
 - Block Public Access ON
-- Bucket policy presente
-- Access Analyzer existe
+- Bucket policy present
+- Access Analyzer exists
 
-Tests manuales recomendados desde browser:
-1. Login `viewer` → galería carga
-2. Logout, login `admin` → ves "Quién tiene acceso al bucket" + zona de upload
-3. **Pegar la URL de un objeto vía console "Open" en pestaña incognito** → debe dar **403** (admin-cli denegado)
-4. DevTools Network → verificar que las requests a S3 NO tienen `X-Amz-Signature` en la URL (solo en headers Authorization)
+Recommended manual tests from the browser:
+1. Login `viewer` → gallery loads
+2. Logout, login `admin` → "Who has access to the bucket" + upload zone visible
+3. **Paste a console "Open" URL of an object into an incognito tab** → must return **403** (admin-cli denied)
+4. DevTools Network → confirm S3 requests don't have `X-Amz-Signature` in the URL (only in the Authorization header)
 
 ---
 
@@ -629,28 +642,29 @@ Tests manuales recomendados desde browser:
 
 ```bash
 bash scripts/cleanup.sh
-# Pide escribir literal "DELETE" para confirmar
-# Borra: bucket + contenido, bucket de logs, IAM users, group, roles, analyzer
+# Asks you to type literal "DELETE" to confirm
+# Wipes: bucket + contents, logs bucket, IAM users, group, roles, analyzer
 ```
 
 ---
 
-## Estructura del repo
+## Repo structure
 
 ```
 .
-├── README.md                              # este archivo
-├── .envrc                                 # variables resueltas dinámicamente
+├── README.md                              # this file (English)
+├── README_ES.md                           # Spanish version
+├── .envrc                                 # variables resolved dynamically
 ├── scripts/
-│   ├── lib.sh                             # helpers compartidos
+│   ├── lib.sh                             # shared helpers
 │   ├── 00-preflight.sh                    # check tools + AWS auth
-│   ├── 01-audit.sh                        # snapshots pre-cambios
+│   ├── 01-audit.sh                        # pre-change snapshots
 │   ├── 02-create-role.sh                  # uploader role
 │   ├── 03-create-readers.sh               # legacy IAM users + group
 │   ├── 04-bucket-policy.sh                # hardening + CORS
 │   ├── 05-access-analyzer.sh              # analyzer + logging
 │   ├── 06-create-viewer-role.sh           # viewer role
-│   ├── 07-create-broker-user.sh           # broker user para Vercel
+│   ├── 07-create-broker-user.sh           # broker user for Vercel
 │   ├── 99-verify.sh                       # E2E tests
 │   └── cleanup.sh                         # tear-down
 ├── frontend-app/
@@ -661,9 +675,9 @@ bash scripts/cleanup.sh
 │   │   └── .env.example
 │   ├── client/
 │   │   ├── index.html                     # SPA: login, gallery, upload, access-list
-│   │   ├── app.js                         # AWS SDK v2 → S3 directo desde browser
+│   │   ├── app.js                         # AWS SDK v2 → S3 directly from browser
 │   │   └── style.css
-│   ├── package.json                       # deps para Vercel function
+│   ├── package.json                       # deps for the Vercel function
 │   └── vercel.json                        # rewrites
 └── audit-evidence/                        # gitignored — snapshots + access keys + logs
 ```
