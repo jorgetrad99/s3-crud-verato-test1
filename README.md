@@ -8,6 +8,108 @@ Integración de un bucket S3 con acceso restringido a un servicio que carga dato
 
 ---
 
+## La app en acción
+
+> Capturas tomadas de la versión desplegada en Vercel.
+
+### 1. Login
+
+Mismo formulario para los dos perfiles. La app autentica contra usuarios hardcoded (`admin`/`viewer`) y, al validar, llama a STS para emitir credenciales temporales del role correspondiente.
+
+![Login screen](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/login.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150143Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=9df29f1a49b26748ff73af62842e9e63cb1393343b6dc818aa9d0abe19504237&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+
+### 2. Viewer — solo lectura
+
+`viewer` solo ve la galería paginada. Sin zona de upload, sin botones de eliminar, sin panel admin. Sus credenciales temporales corresponden al `frontend-viewer-role` que solo tiene `s3:GetObject` y `s3:ListBucket`.
+
+![Viewer view](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/viewer-overview.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150115Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=e14e2333ef9888de5729d7324da540ec578e000864b0723a6b745df26def9ddb&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+
+### 3. Admin — vista completa
+
+Cuando entra `admin`, aparecen tres secciones:
+- Zona de upload (drag-drop)
+- Tabla "Quién tiene acceso al bucket" (lee la bucket policy en vivo via `/api/access-list`)
+- Galería con botón eliminar por fila
+
+![Admin overview](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/03-admin-overview.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150226Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=642d8d6c76f12640aa688f1ad971a8ac2cc561fee562c5384d7813da0afd8deb&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+
+### 4. Panel de acceso (admin)
+
+La tabla muestra exactamente los 2 principals que la bucket policy autoriza para datos, más cards informativas con el estado de Block Public Access, TLS, CORS y el grupo IAM legacy.
+
+![Access list panel](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/accessliist.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150204Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=5e9bf1f0897789ec8bf65c33041dfb09871f7be48775ce8c361080cb9c003075&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+
+### 5. Drag-and-drop con preview de chips
+
+Los archivos seleccionados aparecen como chips con tamaño y botón para quitar. El contador `X / 50` muestra la capacidad del bucket en tiempo real.
+
+![Drag-drop with chips](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/dragndrop.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAE5I5GQGE%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T150415Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEO%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIHZtBTk1%2BNGPdsV%2FxEIJ8zK1cmbKWQaKMNyKIF%2FHz0%2FKAiEAr0g5Oz6eX%2FEF1%2FWk4Vrrs2Koef9nOiaQXYtmRA4eGIoq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDNcE14zzJuvJq7D6fiq3ArNJZeJMnYdRrYPAKCoBvTXtRXmfh6xFbh%2FHGRu%2B44GpQr6WG2yL7oYZaSccTgNTeiJffttvVuhplj9VYunFlASoyLKwDuFg%2BNVxGpqgzqnDevpgvIsdMV7%2FAE0D2bOT8Sz%2F6Sp3%2F9PANT6ea6%2FjKb%2FrCtBzi%2B%2Bpm%2Ffije77keLlHjwn4c7yM3HanAdFOs%2F0TJAeLlyTAFiEqRzbbM9dTWUtMCYeV1M6D2YVb1Z%2By0ASLZMyaCt%2FDaPYyOb1C1Do0J0tAQ0%2F8hUe90cYfcREFASqQf9QlMGy7nthoLVP7yjnHnoU3KTG3MI02AFJolsEQ%2BdkYFoaZ6KFvwdzrFYJ49qUK6dU1pp6U0%2BNMeyTPTpFq7nDYOjAFL09RN9ggdS11yaUF67O8rgBhhniPTQdodubYfWgjrTfMPez8s8GOq0CbjPY8DLkGt9OGRwHjKOoGZs7T1mAh%2BSbBY9kJ9ykfFUtULtUVBe7bY8d5LsBgseDlLI%2FASo8%2B80TMipfOCoo24FFbgxPexEZkJv%2FzcdHBY%2B7LkTAEGgetPKxNdCZbIgE45PX0yZqKY%2FLIww8cr46YrjMRAn6ISiqa%2FC3QSPJHYfLukawyof8Of%2FGEa9jcRBPaK8NBGNBqz%2F4i4mD8D6ET85IiBO%2Fwpak3VPFoli8pVE%2BIR4qyOs8AwJQonedpVwjVCPOeGmZiM8ysJR%2F6u7DP0tSqL62z%2BFcGt0f%2B4KyoezC3Eg87TUgtFb%2FX0yJUCZyE05zmL6n9qbrPKSPPrjRLYelAAGAwjUsQaf8Q0ms6DsnJTZ%2FpS0ALdmXWSpU67%2FiS7cTkeyiIB8GlPmHkg%3D%3D&X-Amz-Signature=25fef07367ae391b2e41e07717c293ac66f6227e3aaacf61793c341bd48bfc85&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+
+### 6. La prueba de seguridad: presigned URL firmada por `admin-cli` → 403
+
+El test demuestra que la bucket policy se evalúa **en cada request**, no solo al firmar la URL. `admin-cli` puede generar técnicamente una URL firmada (la firma es un cómputo local, no requiere hablar con S3), pero al usarla, S3 verifica el `aws:PrincipalArn` y aplica el `Deny`.
+
+> Nota: no funciona el camino "click Open en la consola de S3" porque después de la última policy, `admin-cli` tampoco puede listar ni abrir el bucket desde la consola web. El test va por **CLI**.
+
+**Paso a paso:**
+
+```bash
+# 1. Obtener el key de un objeto que ya está en el bucket.
+#    Caminos posibles:
+#    - Login admin en la app, click cualquier asset → copia el campo "Key" del modal
+#    - O navega a https://s3-crud-verato-test1.jorgetrad.com → DevTools → Network → request a S3
+KEY="assets/Improvising_101.pdf"   # ejemplo
+
+# 2. Generar el presigned URL con tus credenciales de admin-cli (perfil default).
+#    `aws s3 presign` solo firma localmente, no llama a S3, así que funciona aunque
+#    admin-cli esté denegado por bucket policy.
+URL=$(aws s3 presign "s3://integration-assets-242032648320/${KEY}" --expires-in 300)
+echo "$URL"
+# Output: https://integration-assets-242032648320.s3.us-east-1.amazonaws.com/assets/...
+#   ?X-Amz-Algorithm=AWS4-HMAC-SHA256
+#   &X-Amz-Credential=AKIATQWSFECA.../20260507/us-east-1/s3/aws4_request
+#   &X-Amz-Signature=...
+
+# 3. Validar inmediatamente desde la terminal que la URL recién firmada SÍ falla
+curl -i "$URL" | head -20
+# Respuesta esperada:
+#   HTTP/1.1 403 Forbidden
+#   <Error>
+#     <Code>AccessDenied</Code>
+#     <Message>User: arn:aws:iam::242032648320:user/admin-cli is not
+#       authorized to perform: s3:GetObject on resource ... with an
+#       explicit deny in a resource-based policy</Message>
+#   </Error>
+```
+
+**4.** Copia esa URL completa (la del paso 2) y pégala en una pestaña **Incognito / InPrivate** del browser.
+
+**5.** El browser muestra el XML de error de S3 con `<Code>AccessDenied</Code>`. Captura esa pestaña — ese es el screenshot que prueba que la URL no funciona ni siquiera dentro de su TTL de 5 min.
+
+![403 from presigned URL](https://jorgetrad-assets.s3.us-east-1.amazonaws.com/AccessDenied.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIATQWSFECAGHHHRAIQ%2F20260507%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260507T151247Z&X-Amz-Expires=300&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEPD%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIANUeRMyk6%2BLxsdCI%2F%2BJaqF8SNXiSYYEIZq4NfQN4jNqAiEAkjso8PO8h2o%2FEPHCJp8Oxysv2eyvDtuLTlxlw0wiJMkq4wIIuP%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgwyNDIwMzI2NDgzMjAiDJ6WtRsWvbOClBn1Kyq3AvEvV8vQ15b7Y5osqTYHTMTCpm1tlwYupZNeoAjaxWxTYT0qxynaZL%2BlFK5DWbnZxWLM87VHY%2F%2F4l%2BqDUZY%2Fw4iYnOXyLWSM71plJv4q4gCZ0VA5e2jJXmaxZQTKGNQNWzFSfhwH3Q5ET5U6Hkhc02A1WcEwYPSln4ySnN2Kj2anEhGq7aQ4bv9Hfrbpr5p0zbpsVRoGCq8m5LFRWR1wjZWjZ9L9SAucmlpqkWVZVjmPQqvdhXk7ynpQwNZ%2B0USoMPKIQDw2rpeIWKVn2%2BNQzpr2ZXRuo8bcXp%2B7j%2BcJk1hw5MZMLMZi5mF04yUvtGR77H5tePLZOWJEW%2Bnw3CHJlUZH%2B6o8PjSq4qhK%2FlVSveDCAGZbliniRblOy3%2FtaEGQlWYieB5R4NHPrGRX4ybCsDh2DGOXcUS7MPez8s8GOq0CoyBcb5PE4b7SwrsVzluWVM%2F4xga2ZelYvFe9QlIzHeUwnYL1lQHldZR5lOXSsrQh5hcV1q730qWjsAbo0joZKQ54lPkSjB42%2BqgnSjCYL4H1mIJP7rGvLqIHFo%2BhNchnJN7xOYf6L0qg%2FQHCOBItVbIdt6sroyWbOIkF%2Bl%2F37%2B7ByEkqpFfcdFb%2BvW1B05rZTJcZ6ffyu7pWSQYQdG0dGoLfifZMnDYRQ1afIkwYTHiM9Rt%2BX4IgMDPh2th%2F3tav2jnmHs38azYiIttgWIwF%2B1zBu3m7yuKznufbqvcIlZ5hLB%2BP2AZxmb0%2B5tEss3Om2XFe2IttrRbNbOGZRGiaT4uc2WcKB4yxr4Qj0f4m95ykpCeCSxeCOEZxefx%2F0kGLeJqnQJXzKd4CLJuOiw%3D%3D&X-Amz-Signature=89b150eab55c1121236b625d72fbe59875800bbc512000c248cb87183e3777f2&X-Amz-SignedHeaders=host&response-content-disposition=inline)
+
+> **Lo que esto prueba:** aunque la firma sea criptográficamente válida y la URL esté dentro del TTL, la bucket policy se aplica por request. Cualquier identidad **fuera de los 2 roles** (`integration-uploader-role` y `frontend-viewer-role`) recibe 403 — sin importar quién comparta el URL ni desde qué dispositivo.
+
+> **Test contrario (opcional, demuestra que el role SÍ funciona):** asume `frontend-viewer-role`, genera la URL con esas creds temporales, pégala en incognito → **200 OK** (el role está autorizado). Útil para mostrar que el control es por identidad, no por path:
+> ```bash
+> CREDS=$(aws sts assume-role \
+>   --role-arn arn:aws:iam::242032648320:role/frontend-viewer-role \
+>   --role-session-name proof \
+>   --external-id integration-upload-2025)
+>
+> export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | python -c "import json,sys;print(json.load(sys.stdin)['Credentials']['AccessKeyId'])")
+> export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | python -c "import json,sys;print(json.load(sys.stdin)['Credentials']['SecretAccessKey'])")
+> export AWS_SESSION_TOKEN=$(echo "$CREDS" | python -c "import json,sys;print(json.load(sys.stdin)['Credentials']['SessionToken'])")
+>
+> aws s3 presign "s3://integration-assets-242032648320/${KEY}" --expires-in 300
+> # Esa URL sí funciona en incognito durante 300s.
+>
+> # Limpia las creds temporales del shell:
+> unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+> ```
+
+---
+
 ## Stack técnico
 
 | Capa | Tecnología |
